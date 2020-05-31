@@ -20,8 +20,6 @@ import {
   ACTION_UNKNOWN
 } from './error'
 
-// TODO: abstract errors
-
 const reducerFactory = (model: Model) => (action: StateMachineAction) => {
   model.log.unshift(action)
 
@@ -55,17 +53,11 @@ const reducerFactory = (model: Model) => (action: StateMachineAction) => {
       break
     }
     case TypeAction.Transition: {
-      const transitionAction = action.payload.action
-
-      let indexAction = model.state.actions.indexOf(transitionAction)
-
-      if (indexAction === -1) {
-        indexAction = model.state.actions.push(transitionAction) - 1
-      }
-
+      const indexAction = model.state.actions.indexOf(action.payload.action)
       const indexSource = model.state.states.indexOf(action.payload.source)
+      const indexTarget = model.state.states.indexOf(action.payload.target)
 
-      if (indexSource === -1) {
+      if (indexSource === -1 || indexTarget === -1 || indexAction === -1) {
         return STATE_UNKNOWN()
       }
 

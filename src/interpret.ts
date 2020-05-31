@@ -70,6 +70,7 @@ export const interpret = <T extends InteropStateMachine>(
 
   const interop = {
     [Symbol.observable](): Subscribable<Change> {
+      /* istanbul ignore next */
       return subscribable
     }
   }
