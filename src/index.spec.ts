@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+
 import { stateMachine, interpret, SYMBOL_LOG, SYMBOL_STATE } from './index'
 import { cloneDeep } from 'lodash-es'
 
@@ -98,7 +100,7 @@ describe('./src/index.spec.ts', () => {
         return context
       }
     )
-    .transition(TypeState.Unlocked, TypeAction.Coin, TypeState.Unlocked)
+    .transition(TypeState.Unlocked, TypeAction.Coin, [TypeState.Unlocked])
     .transition(
       [TypeState.Locked, TypeState.Unlocked, TypeState.Waiting],
       TypeAction.Push,
@@ -125,8 +127,7 @@ describe('./src/index.spec.ts', () => {
 
     const turnstile = interpret(machine)
 
-    // const { unsubscribe } =
-    turnstile.subscribe((value) => {
+    const { unsubscribe } = turnstile.subscribe((value) => {
       spyObservable(cloneDeep(value))
     })
 
@@ -461,6 +462,8 @@ describe('./src/index.spec.ts', () => {
       }
     })
 
+    unsubscribe()
+
     turnstile.do(TypeAction.Push)
     assert.equal(turnstile.state, TypeState.Locked)
 
@@ -484,5 +487,71 @@ describe('./src/index.spec.ts', () => {
       coins: [25, 25, 50],
       active: []
     })
+
+    assert.equal(spyObservable.callCount, 7)
+  })
+
+  it('fff', () => {
+    assert.throws(() =>
+      // @ts-expect-error
+      stateMachine().state(TypeState.Unlocked).state(TypeState.Unlocked)
+    )
+
+    assert.throws(() =>
+      // @ts-expect-error
+      stateMachine().state(TypeState.Unlocked).initial(TypeState.Locked)
+    )
+
+    assert.throws(() =>
+      stateMachine()
+        .state(TypeState.Unlocked)
+        .initial(TypeState.Unlocked)
+        .action(TypeAction.Push)
+        // @ts-expect-error
+        .action(TypeAction.Push)
+    )
+
+    assert.throws(() =>
+      stateMachine()
+        .state(TypeState.Unlocked)
+        .initial(TypeState.Unlocked)
+        .action(TypeAction.Push)
+        // @ts-expect-error
+        .transition(TypeState.Locked, TypeAction.Push, TypeState.Unlocked)
+    )
+
+    assert.throws(() =>
+      stateMachine()
+        .state(TypeState.Unlocked)
+        .initial(TypeState.Unlocked)
+        .action(TypeAction.Push)
+        // @ts-expect-error
+        .transition(TypeState.Unlocked, TypeAction.Coin, TypeState.Unlocked)
+    )
+
+    assert.throws(() =>
+      stateMachine()
+        .state(TypeState.Unlocked)
+        .initial(TypeState.Unlocked)
+        .action(TypeAction.Push)
+        // @ts-expect-error
+        .transition(TypeState.Unlocked, TypeAction.Push, TypeState.Locked)
+    )
+
+    assert.throws(() =>
+      interpret(
+        stateMachine()
+          .state(TypeState.Unlocked)
+          .initial(TypeState.Unlocked)
+          .action(TypeAction.Push)
+          .transition(TypeState.Unlocked, TypeAction.Push, TypeState.Unlocked)
+        // @ts-expect-error
+      ).do(TypeAction.Coin)
+    )
+
+    assert.throws(() =>
+      // @ts-expect-error
+      interpret(stateMachine().state(TypeState.Unlocked))
+    )
   })
 })
