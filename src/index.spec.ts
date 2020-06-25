@@ -114,6 +114,16 @@ describe('./src/index.spec.ts', () => {
       }
     )
 
+  // it('mutabe', () => {
+  //   const log = cloneDeep(machine[SYMBOL_LOG])
+  //   const state = cloneDeep(machine[SYMBOL_STATE])
+  //
+  //   machine.transition(TypeState.Waiting, TypeAction.Push, TypeState.Unlocked)
+  //
+  //   assert.deepEqual(machine[SYMBOL_LOG], log)
+  //   assert.deepEqual(machine[SYMBOL_STATE], state)
+  // })
+
   it('api', () => {
     const turnstile = interpret(machine)
 
