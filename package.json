@@ -39,7 +39,7 @@
     "lint-staged": "10.2.7",
     "lodash-es": "4.17.15",
     "prettier": "2.0.5",
-    "semantic-release": "17.0.8",
+    "semantic-release": "17.2.3",
     "simple-statistics": "7.1.0",
     "sinon": "9.0.2",
     "syncpack": "5.0.1",
