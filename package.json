@@ -6,7 +6,7 @@
   "browser": "lib/umd/index.js",
   "bugs": "https://github.com/escapace/fsm/issues",
   "dependencies": {
-    "@escapace/typelevel": "^0.6.2",
+    "@escapace/typelevel": "^1.0.0",
     "rxjs-interop": "^1.0.3",
     "tslib": "^2.1.0"
   },
