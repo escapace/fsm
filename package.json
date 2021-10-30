@@ -7,7 +7,7 @@
   "bugs": "https://github.com/escapace/fsm/issues",
   "dependencies": {
     "@escapace/typelevel": "^0.6.2",
-    "rxjs-interop": "^1.0.3",
+    "rxjs-interop": "^2.0.0",
     "tslib": "^2.1.0"
   },
   "devDependencies": {
