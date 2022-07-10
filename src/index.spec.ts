@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
 import { stateMachine, interpret, SYMBOL_LOG, SYMBOL_STATE } from './index'
@@ -137,8 +138,10 @@ describe('./src/index.spec.ts', () => {
 
     const turnstile = interpret(machine)
 
-    const { unsubscribe } = turnstile.subscribe((value) => {
-      spyObservable(cloneDeep(value))
+    const { unsubscribe } = turnstile.subscribe({
+      next: (value) => {
+        spyObservable(cloneDeep(value))
+      }
     })
 
     const coin = (coin: 5 | 10 | 25 | 50) =>

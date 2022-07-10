@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-includes, @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
 
 import $ from '@escapace/typelevel'
 import {
@@ -47,22 +47,14 @@ export const interpret = <T extends InteropStateMachine>(
   const observers = new Set<Observer<Change>>()
 
   const subscribable: Subscribable<Change> = {
-    subscribe(
-      nextOrObserver?:
-        | PartialObserver<Change>
-        | ((value: Change) => void)
-        | null,
-      error?: ((error: any) => void) | null,
-      complete?: (() => void) | null
-    ) {
-      const observer = toObserver(nextOrObserver, error, complete)
+    subscribe(observer?: PartialObserver<Change>) {
+      const ref = toObserver(observer)
 
-      // observer.next(42)
-      observers.add(observer)
+      observers.add(ref)
 
       return {
         unsubscribe: () => {
-          observers.delete(observer)
+          observers.delete(ref)
         }
       }
     }
@@ -140,11 +132,14 @@ export const interpret = <T extends InteropStateMachine>(
       observers.forEach((observer) =>
         observer.next({ state, context, action: _action } as Change)
       )
+
+      // eslint-disable-next-line no-useless-return
+      return
     },
     ...subscribable,
     ...patch(interop)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   return instance as any
 }
