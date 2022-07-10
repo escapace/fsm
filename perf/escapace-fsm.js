@@ -1,6 +1,6 @@
-const { stateMachine, interpret } = require('../lib/cjs')
-const { performance } = require('perf_hooks')
-const log = require('./log')
+import { stateMachine, interpret } from '../lib/esm/index.mjs'
+import { performance } from 'perf_hooks'
+import { log } from './log.mjs'
 
 const A = []
 const B = []

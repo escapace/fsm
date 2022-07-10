@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/ban-types */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import $ from '@escapace/typelevel'
 import type { Subscribable, InteropObservable } from 'rxjs-interop'
 
-export const SYMBOL_LOG = Symbol.for('ESCAPACE-STATE-MACHINE-LOG')
-export const SYMBOL_STATE = Symbol.for('ESCAPACE-STATE-MACHINE-STATE')
+export const SYMBOL_LOG = Symbol.for('ESCAPACE-FSM-LOG')
+export const SYMBOL_STATE = Symbol.for('ESCAPACE-FSM-STATE')
 
 export enum TypeAction {
   Context,
@@ -51,6 +51,7 @@ export interface ActionState<T extends PlaceholderState = PlaceholderState> {
 
 export interface ActionAction<
   T extends PlaceholderAction = PlaceholderAction,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _ = unknown
 > {
   type: TypeAction.Action
@@ -191,9 +192,8 @@ export type Cast<T extends InteropStateMachine> = T extends InteropStateMachine<
   ? Model<A, B>
   : never
 
-export type ReadonlyStateMachineService<
-  T extends StateMachineService
-> = Readonly<Fluent<T, 'context' | 'state'>>
+export type ReadonlyStateMachineService<T extends StateMachineService> =
+  Readonly<Fluent<T, 'context' | 'state'>>
 
 export interface Action<
   T extends Model = Model,

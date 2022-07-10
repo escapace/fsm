@@ -1,10 +1,10 @@
-const {
+import {
   median,
   mean,
   min,
   max,
   standardDeviation
-} = require('../node_modules/simple-statistics/dist/simple-statistics.js')
+} from 'simple-statistics'
 
 const diff = (A, B) => {
   return A.map((value, index) => {
@@ -12,7 +12,7 @@ const diff = (A, B) => {
   })
 }
 
-module.exports = (A, B) => {
+export const log = (A, B) => {
   const values = diff(A, B)
 
   console.log('Median', median(values))

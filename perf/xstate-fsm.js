@@ -1,6 +1,6 @@
-const { createMachine, interpret } = require('@xstate/fsm')
-const { performance } = require('perf_hooks')
-const log = require('./log')
+import { createMachine, interpret } from '@xstate/fsm'
+import { performance } from 'perf_hooks'
+import { log } from './log.mjs'
 
 const A = []
 const B = []
