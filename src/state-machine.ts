@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-includes, @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/prefer-includes, @typescript-eslint/no-explicit-any */
 
 import {
   ACTION_EXISTS,
@@ -23,6 +23,7 @@ import {
 const reduce = (_model: Model, action: StateMachineAction) => {
   const model = { ..._model }
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   model.log = [action, ...model.log]
 
   switch (action.type) {
@@ -140,44 +141,47 @@ const context = (model: Model) => (arg: unknown) => {
   return { transition: transition(next) }
 }
 
-const transition = (model: Model) => (
-  source: Placeholder | Placeholder[],
-  action: Placeholder | [Placeholder, ...Array<(...args: any[]) => boolean>],
-  target: Placeholder | Placeholder[],
-  reducer?: (...args: any[]) => unknown
-) => {
-  const ap = Array.isArray(action)
-    ? {
-        action: action[0],
-        predicates: action.slice(1) as Array<(...args: any[]) => boolean>
-      }
-    : { action, predicates: [] }
+const transition =
+  (model: Model) =>
+  (
+    source: Placeholder | Placeholder[],
+    action: Placeholder | [Placeholder, ...Array<(...args: any[]) => boolean>],
+    target: Placeholder | Placeholder[],
+    reducer?: (...args: any[]) => unknown
+  ) => {
+    const ap = Array.isArray(action)
+      ? {
+          action: action[0],
+          predicates: action.slice(1) as Array<(...args: any[]) => boolean>
+        }
+      : { action, predicates: [] }
 
-  if (model.state.actions.indexOf(ap.action) === -1) {
-    return ACTION_UNKNOWN()
+    if (model.state.actions.indexOf(ap.action) === -1) {
+      return ACTION_UNKNOWN()
+    }
+
+    const next = product(
+      Array.isArray(source) ? source : [source],
+      Array.isArray(target) ? target : [target]
+    ).reduce<Model>((acc, [source, target]) => {
+      return reduce(acc, {
+        type: TypeAction.Transition,
+        payload: {
+          source,
+          target,
+          reducer,
+          ...ap
+        }
+      })
+    }, model)
+
+    return {
+      transition: transition(next),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      [SYMBOL_LOG]: [...next.log],
+      [SYMBOL_STATE]: { ...next.state }
+    }
   }
-
-  const next = product(
-    Array.isArray(source) ? source : [source],
-    Array.isArray(target) ? target : [target]
-  ).reduce<Model>((acc, [source, target]) => {
-    return reduce(acc, {
-      type: TypeAction.Transition,
-      payload: {
-        source,
-        target,
-        reducer,
-        ...ap
-      }
-    })
-  }, model)
-
-  return {
-    transition: transition(next),
-    [SYMBOL_LOG]: [...next.log],
-    [SYMBOL_STATE]: { ...next.state }
-  }
-}
 
 const initial = (model: Model) => (arg: Placeholder) => {
   const next = reduce(model, {
@@ -200,5 +204,5 @@ export const stateMachine = (
     }
   }
 ): Fluent<Next, 'state'> => {
-  return ({ state: state(model) } as unknown) as Fluent<Next, 'state'>
+  return { state: state(model) } as unknown as Fluent<Next, 'state'>
 }
