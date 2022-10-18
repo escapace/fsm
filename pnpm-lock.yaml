@@ -7,7 +7,7 @@ specifiers:
   '@ls-lint/ls-lint': 1.11.2
   '@types/chai': 4.3.1
   '@types/lodash-es': 4.17.6
-  '@types/mocha': 9.1.1
+  '@types/mocha': 10.0.0
   '@types/node': 18.0.3
   '@types/sinon': 10.0.12
   '@typescript-eslint/eslint-plugin': 5.30.5
@@ -50,7 +50,7 @@ devDependencies:
   '@ls-lint/ls-lint': 1.11.2
   '@types/chai': 4.3.1
   '@types/lodash-es': 4.17.6
-  '@types/mocha': 9.1.1
+  '@types/mocha': 10.0.0
   '@types/node': 18.0.3
   '@types/sinon': 10.0.12
   '@typescript-eslint/eslint-plugin': 5.30.5_6zdoc3rn4mpiddqwhppni2mnnm
@@ -441,8 +441,8 @@ packages:
     resolution: {integrity: sha512-jhuKLIRrhvCPLqwPcx6INqmKeiA5EWrsCOPhrlFSrbrmU4ZMPjj5Ul/oLCMDO98XRUIwVm78xICz4EPCektzeQ==}
     dev: true
 
-  /@types/mocha/9.1.1:
-    resolution: {integrity: sha512-Z61JK7DKDtdKTWwLeElSEBcWGRLY8g95ic5FoQqI9CMx0ns/Ghep3B4DfcEimiKMvtamNVULVNKEsiwV3aQmXw==}
+  /@types/mocha/10.0.0:
+    resolution: {integrity: sha512-rADY+HtTOA52l9VZWtgQfn4p+UDVM2eDVkMZT1I6syp0YKxW2F9v+0pbRZLsvskhQv/vMb6ZfCay81GHbz5SHg==}
     dev: true
 
   /@types/node/14.18.31:
