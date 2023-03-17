@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
-import { stateMachine, interpret, SYMBOL_LOG, SYMBOL_STATE } from './index'
 import { cloneDeep } from 'lodash-es'
+import { SYMBOL_LOG, SYMBOL_STATE, interpret, stateMachine } from './index'
 
 import { assert } from 'chai'
 import { spy } from 'sinon'
@@ -138,10 +137,8 @@ describe('./src/index.spec.ts', () => {
 
     const turnstile = interpret(machine)
 
-    const { unsubscribe } = turnstile.subscribe({
-      next: (value) => {
-        spyObservable(cloneDeep(value))
-      }
+    const unsubscribe = turnstile.subscribe((value) => {
+      spyObservable(cloneDeep(value))
     })
 
     const coin = (coin: 5 | 10 | 25 | 50) =>
