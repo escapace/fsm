@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import $ from '@escapace/typelevel'
-import type { Subscribable, InteropObservable } from 'rxjs-interop'
 
 export const SYMBOL_LOG = Symbol.for('ESCAPACE-FSM-LOG')
 export const SYMBOL_STATE = Symbol.for('ESCAPACE-FSM-STATE')
@@ -173,15 +172,17 @@ export interface Change<T extends Model = Model> {
     : never
 }
 
-export interface StateMachineService<T extends Model = Model>
-  extends Subscribable<Change<T>>,
-    InteropObservable<Change<T>> {
+export type Unsubscribe = () => void
+export type Subscription<T extends Model = Model> = (change: Change<T>) => void
+
+export interface StateMachineService<T extends Model = Model> {
   readonly state: States<T>
   readonly context: T['state']['context']
   do: <A extends Actions<T>, B extends Input<T, A>>(
     action: A,
     ...input: $.If<$.Is.Never<B>, never, [B]>
   ) => void
+  subscribe: (subscription: Subscription<T>) => Unsubscribe
   // check: <A extends Event<T>>(event: A) => boolean
   // reset(): void
 }

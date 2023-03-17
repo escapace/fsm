@@ -1,1 +1,1 @@
-# @escapace/fsm
+# typescript-library-starter

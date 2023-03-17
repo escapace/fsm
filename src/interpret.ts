@@ -1,23 +1,17 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
 
 import $ from '@escapace/typelevel'
-import {
-  Observer,
-  PartialObserver,
-  patch,
-  Subscribable,
-  toObserver
-} from 'rxjs-interop'
 import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
 import { szudzik } from './szudzik'
 import {
-  Action,
-  Cast,
-  Change,
-  InteropStateMachine,
-  Placeholder,
-  StateMachineService,
-  SYMBOL_STATE
+  SYMBOL_STATE,
+  Subscription,
+  type Action,
+  type Cast,
+  type Change,
+  type InteropStateMachine,
+  type Placeholder,
+  type StateMachineService
 } from './types'
 
 export const interpret = <T extends InteropStateMachine>(
@@ -44,28 +38,7 @@ export const interpret = <T extends InteropStateMachine>(
   let state: Placeholder = initial as Placeholder
   let indexState = states.indexOf(state)
 
-  const observers = new Set<Observer<Change>>()
-
-  const subscribable: Subscribable<Change> = {
-    subscribe(observer?: PartialObserver<Change>) {
-      const ref = toObserver(observer)
-
-      observers.add(ref)
-
-      return {
-        unsubscribe: () => {
-          observers.delete(ref)
-        }
-      }
-    }
-  }
-
-  const interop = {
-    [Symbol.observable](): Subscribable<Change> {
-      /* istanbul ignore next */
-      return subscribable
-    }
-  }
+  const subscriptions = new Set<Subscription>()
 
   const instance: StateMachineService = {
     get state() {
@@ -129,15 +102,17 @@ export const interpret = <T extends InteropStateMachine>(
         context = transition.reducer(context, _action)
       }
 
-      observers.forEach((observer) =>
-        observer.next({ state, context, action: _action } as Change)
+      subscriptions.forEach((subscription) =>
+        subscription({ state, context, action: _action } as Change)
       )
 
-      // eslint-disable-next-line no-useless-return
       return
     },
-    ...subscribable,
-    ...patch(interop)
+    subscribe(subscription: Subscription) {
+      subscriptions.add(subscription)
+
+      return () => subscriptions.delete(subscription)
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return

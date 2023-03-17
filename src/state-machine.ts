@@ -9,15 +9,15 @@ import {
 import { product } from './product'
 import { szudzik } from './szudzik'
 import {
-  ActionTransition,
-  Fluent,
-  Model,
-  Next,
-  Placeholder,
-  StateMachineAction,
   SYMBOL_LOG,
   SYMBOL_STATE,
-  TypeAction
+  TypeAction,
+  type ActionTransition,
+  type Fluent,
+  type Model,
+  type Next,
+  type Placeholder,
+  type StateMachineAction
 } from './types'
 
 const reduce = (_model: Model, action: StateMachineAction) => {

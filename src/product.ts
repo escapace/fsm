@@ -1,4 +1,4 @@
-import { Placeholder } from './types'
+import { type Placeholder } from './types'
 
 export const product = (
   a: Placeholder[],
