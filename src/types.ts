@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import $ from '@escapace/typelevel'
@@ -128,6 +129,7 @@ export type StateMachineReducer<
       [TypeAction.Context]: {
         context: U extends ActionContext<infer X> ? X : never
       }
+      // eslint-disable-next-line @typescript-eslint/ban-types
       [TypeAction.Transition]: {}
     }[$.Cast<U['type'], TypeAction>]
   >,
@@ -180,7 +182,7 @@ export interface StateMachineService<T extends Model = Model> {
   readonly context: T['state']['context']
   do: <A extends Actions<T>, B extends Input<T, A>>(
     action: A,
-    ...input: $.If<$.Is.Never<B>, never, [B]>
+    ...input: $.If<$.Is.Never<B>, [], [B]>
   ) => void
   subscribe: (subscription: Subscription<T>) => Unsubscribe
   // check: <A extends Event<T>>(event: A) => boolean

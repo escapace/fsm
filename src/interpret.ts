@@ -47,6 +47,7 @@ export const interpret = <T extends InteropStateMachine>(
     get context() {
       return context
     },
+    // @ts-expect-error fixme
     do(action, payload) {
       const indexAction = actions.indexOf(action)
 
