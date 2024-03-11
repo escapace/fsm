@@ -11,8 +11,8 @@
     "@escapace/typelevel": "^1.3.5"
   },
   "devDependencies": {
-    "@commitlint/cli": "18.6.1",
-    "@commitlint/config-conventional": "18.6.2",
+    "@commitlint/cli": "19.0.3",
+    "@commitlint/config-conventional": "19.0.3",
     "@ls-lint/ls-lint": "2.2.2",
     "@types/chai": "4.3.12",
     "@types/lodash-es": "4.17.12",
