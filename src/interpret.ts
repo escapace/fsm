@@ -35,7 +35,8 @@ export const interpret = <T extends InteropStateMachine>(
   let context: unknown =
     typeof contextFactory === 'function' ? contextFactory() : contextFactory
 
-  let state: Placeholder = initial as Placeholder
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  let state: Placeholder = initial!
   let indexState = states.indexOf(state)
 
   const subscriptions = new Set<Subscription>()
