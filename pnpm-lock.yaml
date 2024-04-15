@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@escapace/typelevel':
-    specifier: ^1.3.5
-    version: 1.3.5
+    specifier: ^2.0.0
+    version: 2.0.0
 
 devDependencies:
   '@commitlint/cli':
@@ -527,9 +527,9 @@ packages:
     dev: true
     optional: true
 
-  /@escapace/typelevel@1.3.5:
-    resolution: {integrity: sha512-h+evILRmbIlXQ+YqhEcvCtrXb5WTsOOnpLLYHoPrJqVmDUvlq7apsXvVHglodnr4e8OjD0YKXUkL92SUAJlduQ==}
-    engines: {node: '>=18.18.0', pnpm: '>=8.7.6'}
+  /@escapace/typelevel@2.0.0:
+    resolution: {integrity: sha512-71JXHGZL4cnVTgIyKARC+aEc4BO5hVCbawJPPN6Hg4uRrp0UGGzgN6ENMBmwQ22QtWEbF1S0Ya+5v1lHlH/6Bg==}
+    engines: {node: '>=20.12.0', pnpm: '>=8.15.6'}
     dev: false
 
   /@eslint-community/eslint-utils@4.4.0(eslint@8.57.0):
