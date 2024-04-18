@@ -1,4 +1,4 @@
-import { performance } from 'perf_hooks'
+import { performance } from 'node:perf_hooks'
 import { log } from './log.mjs'
 
 const A = []
@@ -18,6 +18,6 @@ const send = () => {
   }
 }
 
-;[...Array(1000000).keys()].forEach(() => send())
+;[...Array(1_000_000).keys()].forEach(() => send())
 
 log(A, B)

@@ -1,18 +1,21 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
 
-import $ from '@escapace/typelevel'
+import type $ from '@escapace/typelevel'
 import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
 import { szudzik } from './szudzik'
 import {
   SYMBOL_STATE,
-  Subscription,
   type Action,
   type Cast,
   type Change,
   type InteropStateMachine,
   type Placeholder,
-  type StateMachineService
+  type StateMachineService,
+  type Subscription
 } from './types'
+
+const makeIndice = <T>(value: T[]) =>
+  new Map(value.map((value, index) => [value, index] as const))
 
 export const interpret = <T extends InteropStateMachine>(
   stateMachine: T
@@ -25,34 +28,36 @@ export const interpret = <T extends InteropStateMachine>(
   }
 
   const {
-    initial,
     actions,
+    context: contextFactory,
+    initial,
     states,
-    transitions: transitionMap,
-    context: contextFactory
+    transitions: transitionMap
   } = stateMachine[SYMBOL_STATE]
 
   let context: unknown =
     typeof contextFactory === 'function' ? contextFactory() : contextFactory
 
+  // TODO: move this under stateMachine
+  const indiceActions = makeIndice(actions)
+  const indiceStates = makeIndice(states)
+
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   let state: Placeholder = initial!
-  let indexState = states.indexOf(state)
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  let indexState = indiceStates.get(state)!
 
   const subscriptions = new Set<Subscription>()
 
   const instance: StateMachineService = {
-    get state() {
-      return state
-    },
     get context() {
       return context
     },
     // @ts-expect-error fixme
     do(action, payload) {
-      const indexAction = actions.indexOf(action)
+      const indexAction = indiceActions.get(action)
 
-      if (indexAction === -1) {
+      if (indexAction === undefined) {
         return ACTION_UNKNOWN()
       }
 
@@ -64,8 +69,10 @@ export const interpret = <T extends InteropStateMachine>(
       }
 
       const _action: Partial<Action> = {
-        type: action,
-        payload
+        payload,
+        source: undefined,
+        target: undefined,
+        type: action
       }
 
       let transitionIndex = 0
@@ -77,14 +84,38 @@ export const interpret = <T extends InteropStateMachine>(
         _action.source = candidate.source
         _action.target = candidate.target
 
-        const cond =
-          candidate.predicates.length === 0
-            ? true
-            : candidate.predicates.reduce((acc, fn) => {
-                return !acc ? acc : fn(context, _action)
-              }, true)
+        // const cond =
+        //   candidate.predicates.length === 0
+        //     ? true
+        //     : candidate.predicates.reduce(
+        //         (
+        //           accumulator: boolean,
+        //           function_: (...arguments_: any[]) => boolean
+        //         ): boolean => {
+        //           return !accumulator
+        //             ? accumulator
+        //             : function_(context, _action)
+        //         },
+        //         true
+        //       )
 
-        if (cond) {
+        let accumulator = true
+
+        let length = candidate.predicates.length
+
+        while (length > 0) {
+          if (!accumulator) {
+            break
+          }
+
+          accumulator = candidate.predicates[
+            candidate.predicates.length - length
+          ](context, _action)
+
+          length--
+        }
+
+        if (accumulator) {
           transition = candidate
           break
         }
@@ -98,17 +129,25 @@ export const interpret = <T extends InteropStateMachine>(
       }
 
       state = transition.target
-      indexState = states.indexOf(state)
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      indexState = indiceStates.get(state)!
 
       if (transition.reducer !== undefined) {
         context = transition.reducer(context, _action)
       }
 
-      subscriptions.forEach((subscription) =>
-        subscription({ state, context, action: _action } as Change)
-      )
+      for (const subscription of subscriptions) {
+        subscription({ action: _action, context, state } as Change)
+      }
+
+      // subscriptions.forEach((subscription) =>
+      //   subscription({ action: _action, context, state } as Change)
+      // )
 
       return
+    },
+    get state() {
+      return state
     },
     subscribe(subscription: Subscription) {
       subscriptions.add(subscription)

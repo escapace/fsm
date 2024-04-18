@@ -1,5 +1,5 @@
-import { stateMachine, interpret } from '../lib/esm/index.mjs'
-import { performance } from 'perf_hooks'
+import { performance } from 'node:perf_hooks'
+import { interpret, stateMachine } from '../lib/esm/index.mjs'
 import { log } from './log.mjs'
 
 const A = []
@@ -15,6 +15,6 @@ const machine = stateMachine()
 
 const service = interpret(machine)
 
-;[...Array(1000000).keys()].forEach(() => service.do('TOGGLE'))
+;[...Array(1_000_000).keys()].forEach(() => service.do('TOGGLE'))
 
 log(A, B)
