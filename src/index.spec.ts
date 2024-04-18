@@ -7,12 +7,12 @@ import { assert } from 'chai'
 import { spy } from 'sinon'
 
 interface PayloadCoin {
-  coin: 5 | 10 | 25 | 50
+  coin: 10 | 25 | 5 | 50
 }
 
 interface TurnstileState {
-  coins: Array<5 | 10 | 25 | 50>
-  active: Array<5 | 10 | 25 | 50>
+  active: Array<10 | 25 | 5 | 50>
+  coins: Array<10 | 25 | 5 | 50>
 }
 
 enum TypeAction {
@@ -21,31 +21,34 @@ enum TypeAction {
 }
 
 enum TypeState {
+  Locked = 'LOCKED',
   Unlocked = 'UNLOCKED',
-  Waiting = 'WAITING',
-  Locked = 'LOCKED'
+  Waiting = 'WAITING'
 }
 
 enum TypeSpy {
+  Condition = 'CONDITION',
   Lock = 'LOCK',
   Unlock = 'UNLOCK',
-  Wait = 'WAIT',
-  Condition = 'CONDITION'
+  Wait = 'WAIT'
 }
 
 const sum = (array: number[]): number =>
   array.reduce((p: number, c: number) => p + c, 0)
 
-const change = (...values: Array<5 | 10 | 25 | 50>) =>
+const change = (...values: Array<10 | 25 | 5 | 50>) =>
   values
     .sort((a, b) => b - a)
-    .reduce((acc: Array<5 | 10 | 25 | 50>, curr: 5 | 10 | 25 | 50) => {
-      if (sum(acc) >= 50) {
-        return acc
-      }
+    .reduce(
+      (accumulator: Array<10 | 25 | 5 | 50>, current: 10 | 25 | 5 | 50) => {
+        if (sum(accumulator) >= 50) {
+          return accumulator
+        }
 
-      return [...acc, curr]
-    }, [])
+        return [...accumulator, current]
+      },
+      []
+    )
     .sort((a, b) => a - b)
 
 describe('./src/index.spec.ts', () => {
@@ -59,7 +62,7 @@ describe('./src/index.spec.ts', () => {
     .initial(TypeState.Locked)
     .action<TypeAction.Coin, PayloadCoin>(TypeAction.Coin)
     .action(TypeAction.Push)
-    .context<TurnstileState>({ coins: [], active: [] })
+    .context<TurnstileState>({ active: [], coins: [] })
     .transition(
       [TypeState.Locked, TypeState.Waiting],
       [
@@ -141,7 +144,7 @@ describe('./src/index.spec.ts', () => {
       spyObservable(cloneDeep(value))
     })
 
-    const coin = (coin: 5 | 10 | 25 | 50) =>
+    const coin = (coin: 10 | 25 | 5 | 50) =>
       turnstile.do(TypeAction.Coin, { coin })
 
     assert.equal(turnstile.state, TypeState.Locked)
@@ -157,47 +160,47 @@ describe('./src/index.spec.ts', () => {
 
     assert.deepEqual(spyTransition.getCall(0).args, [
       TypeSpy.Condition,
-      { coins: [], active: [] },
+      { active: [], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 5 },
         source: TypeState.Locked,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.deepEqual(spyTransition.getCall(1).args, [
       TypeSpy.Wait,
-      { coins: [], active: [] },
+      { active: [], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 5 },
         source: TypeState.Locked,
-        target: TypeState.Waiting
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
       }
     ])
 
     assert.equal(turnstile.state, TypeState.Waiting)
 
     assert.deepEqual(turnstile.context, {
-      coins: [],
-      active: [5]
+      active: [5],
+      coins: []
     })
 
     assert.equal(spyObservable.callCount, 1)
 
     assert.deepEqual(spyObservable.getCall(0).args[0], {
-      state: TypeState.Waiting,
+      action: {
+        payload: { coin: 5 },
+        source: TypeState.Locked,
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
+      },
       context: {
         active: [5],
         coins: []
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 5 },
-        source: TypeState.Locked,
-        target: TypeState.Waiting
-      }
+      state: TypeState.Waiting
     })
 
     // 10 ----------------------------------------------------------------------
@@ -208,47 +211,47 @@ describe('./src/index.spec.ts', () => {
 
     assert.deepEqual(spyTransition.getCall(2).args, [
       TypeSpy.Condition,
-      { coins: [], active: [5] },
+      { active: [5], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 10 },
         source: TypeState.Waiting,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.deepEqual(spyTransition.getCall(3).args, [
       TypeSpy.Wait,
-      { coins: [], active: [5] },
+      { active: [5], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 10 },
         source: TypeState.Waiting,
-        target: TypeState.Waiting
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
       }
     ])
 
     assert.equal(turnstile.state, TypeState.Waiting)
 
     assert.deepEqual(turnstile.context, {
-      coins: [],
-      active: [5, 10]
+      active: [5, 10],
+      coins: []
     })
 
     assert.equal(spyObservable.callCount, 2)
 
     assert.deepEqual(spyObservable.getCall(1).args[0], {
-      state: TypeState.Waiting,
+      action: {
+        payload: { coin: 10 },
+        source: TypeState.Waiting,
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
+      },
       context: {
         active: [5, 10],
         coins: []
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 10 },
-        source: TypeState.Waiting,
-        target: TypeState.Waiting
-      }
+      state: TypeState.Waiting
     })
 
     // 25 ----------------------------------------------------------------------
@@ -259,47 +262,47 @@ describe('./src/index.spec.ts', () => {
 
     assert.deepEqual(spyTransition.getCall(4).args, [
       TypeSpy.Condition,
-      { coins: [], active: [5, 10] },
+      { active: [5, 10], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 25 },
         source: TypeState.Waiting,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.deepEqual(spyTransition.getCall(5).args, [
       TypeSpy.Wait,
-      { coins: [], active: [5, 10] },
+      { active: [5, 10], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 25 },
         source: TypeState.Waiting,
-        target: TypeState.Waiting
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
       }
     ])
 
     assert.equal(turnstile.state, TypeState.Waiting)
 
     assert.deepEqual(turnstile.context, {
-      coins: [],
-      active: [5, 10, 25]
+      active: [5, 10, 25],
+      coins: []
     })
 
     assert.equal(spyObservable.callCount, 3)
 
     assert.deepEqual(spyObservable.getCall(2).args[0], {
-      state: TypeState.Waiting,
+      action: {
+        payload: { coin: 25 },
+        source: TypeState.Waiting,
+        target: TypeState.Waiting,
+        type: TypeAction.Coin
+      },
       context: {
         active: [5, 10, 25],
         coins: []
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 25 },
-        source: TypeState.Waiting,
-        target: TypeState.Waiting
-      }
+      state: TypeState.Waiting
     })
 
     // 25 ----------------------------------------------------------------------
@@ -310,47 +313,47 @@ describe('./src/index.spec.ts', () => {
 
     assert.deepEqual(spyTransition.getCall(6).args, [
       TypeSpy.Condition,
-      { coins: [], active: [5, 10, 25] },
+      { active: [5, 10, 25], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 25 },
         source: TypeState.Waiting,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.deepEqual(spyTransition.getCall(7).args, [
       TypeSpy.Unlock,
-      { coins: [], active: [5, 10, 25] },
+      { active: [5, 10, 25], coins: [] },
       {
-        type: TypeAction.Coin,
         payload: { coin: 25 },
         source: TypeState.Waiting,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.equal(turnstile.state, TypeState.Unlocked)
 
     assert.deepEqual(turnstile.context, {
-      coins: [25, 25],
-      active: []
+      active: [],
+      coins: [25, 25]
     })
 
     assert.equal(spyObservable.callCount, 4)
 
     assert.deepEqual(spyObservable.getCall(3).args[0], {
-      state: TypeState.Unlocked,
+      action: {
+        payload: { coin: 25 },
+        source: TypeState.Waiting,
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
+      },
       context: {
         active: [],
         coins: [25, 25]
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 25 },
-        source: TypeState.Waiting,
-        target: TypeState.Unlocked
-      }
+      state: TypeState.Unlocked
     })
 
     // 25 ----------------------------------------------------------------------
@@ -361,24 +364,24 @@ describe('./src/index.spec.ts', () => {
     assert.equal(turnstile.state, TypeState.Unlocked)
 
     assert.deepEqual(turnstile.context, {
-      coins: [25, 25],
-      active: []
+      active: [],
+      coins: [25, 25]
     })
 
     assert.equal(spyObservable.callCount, 5)
 
     assert.deepEqual(spyObservable.getCall(4).args[0], {
-      state: TypeState.Unlocked,
+      action: {
+        payload: { coin: 25 },
+        source: TypeState.Unlocked,
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
+      },
       context: {
         active: [],
         coins: [25, 25]
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 25 },
-        source: TypeState.Unlocked,
-        target: TypeState.Unlocked
-      }
+      state: TypeState.Unlocked
     })
 
     turnstile.do(TypeAction.Push)
@@ -391,10 +394,10 @@ describe('./src/index.spec.ts', () => {
         coins: [25, 25]
       },
       {
-        type: TypeAction.Push,
         payload: undefined,
         source: TypeState.Unlocked,
-        target: TypeState.Locked
+        target: TypeState.Locked,
+        type: TypeAction.Push
       }
     ])
 
@@ -403,17 +406,17 @@ describe('./src/index.spec.ts', () => {
     assert.equal(spyObservable.callCount, 6)
 
     assert.deepEqual(spyObservable.getCall(5).args[0], {
-      state: TypeState.Locked,
+      action: {
+        payload: undefined,
+        source: TypeState.Unlocked,
+        target: TypeState.Locked,
+        type: TypeAction.Push
+      },
       context: {
         active: [],
         coins: [25, 25]
       },
-      action: {
-        type: TypeAction.Push,
-        payload: undefined,
-        source: TypeState.Unlocked,
-        target: TypeState.Locked
-      }
+      state: TypeState.Locked
     })
 
     // 50 ----------------------------------------------------------------------
@@ -428,10 +431,10 @@ describe('./src/index.spec.ts', () => {
         coins: [25, 25]
       },
       {
-        type: TypeAction.Coin,
         payload: { coin: 50 },
         source: TypeState.Locked,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
@@ -442,34 +445,34 @@ describe('./src/index.spec.ts', () => {
         coins: [25, 25]
       },
       {
-        type: TypeAction.Coin,
         payload: { coin: 50 },
         source: TypeState.Locked,
-        target: TypeState.Unlocked
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
       }
     ])
 
     assert.equal(turnstile.state, TypeState.Unlocked)
 
     assert.deepEqual(turnstile.context, {
-      coins: [25, 25, 50],
-      active: []
+      active: [],
+      coins: [25, 25, 50]
     })
 
     assert.equal(spyObservable.callCount, 7)
 
     assert.deepEqual(spyObservable.getCall(6).args[0], {
-      state: TypeState.Unlocked,
+      action: {
+        payload: { coin: 50 },
+        source: TypeState.Locked,
+        target: TypeState.Unlocked,
+        type: TypeAction.Coin
+      },
       context: {
         active: [],
         coins: [25, 25, 50]
       },
-      action: {
-        type: TypeAction.Coin,
-        payload: { coin: 50 },
-        source: TypeState.Locked,
-        target: TypeState.Unlocked
-      }
+      state: TypeState.Unlocked
     })
 
     unsubscribe()
@@ -485,8 +488,8 @@ describe('./src/index.spec.ts', () => {
     assert.equal(turnstile.state, TypeState.Waiting)
 
     assert.deepEqual(turnstile.context, {
-      coins: [25, 25, 50],
-      active: [10]
+      active: [10],
+      coins: [25, 25, 50]
     })
 
     turnstile.do(TypeAction.Push)
@@ -494,8 +497,8 @@ describe('./src/index.spec.ts', () => {
     assert.equal(turnstile.state, TypeState.Locked)
 
     assert.deepEqual(turnstile.context, {
-      coins: [25, 25, 50],
-      active: []
+      active: [],
+      coins: [25, 25, 50]
     })
 
     assert.equal(spyObservable.callCount, 7)

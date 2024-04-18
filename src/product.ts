@@ -1,4 +1,4 @@
-import { type Placeholder } from './types'
+import type { Placeholder } from './types'
 
 export const product = (
   a: Placeholder[],
@@ -12,9 +12,9 @@ export const product = (
     b.length
   )
 
-  for (let i = 0; i < total; i++) {
-    const row = Math.floor(i / factor)
-    const column = i - row * factor
+  for (let index = 0; index < total; index++) {
+    const row = Math.floor(index / factor)
+    const column = index - row * factor
 
     product.push([a[row], b[column]])
   }

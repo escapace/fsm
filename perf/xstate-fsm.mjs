@@ -1,5 +1,5 @@
 import { createMachine, interpret } from '@xstate/fsm'
-import { performance } from 'perf_hooks'
+import { performance } from 'node:perf_hooks'
 import { log } from './log.mjs'
 
 const A = []
@@ -9,19 +9,19 @@ const machine = createMachine({
   id: 'toggle',
   initial: 'inactive',
   states: {
-    inactive: {
-      on: {
-        TOGGLE: {
-          target: 'active',
-          actions: () => A.push(performance.now())
-        }
-      }
-    },
     active: {
       on: {
         TOGGLE: {
-          target: 'inactive',
-          actions: () => B.push(performance.now())
+          actions: () => B.push(performance.now()),
+          target: 'inactive'
+        }
+      }
+    },
+    inactive: {
+      on: {
+        TOGGLE: {
+          actions: () => A.push(performance.now()),
+          target: 'active'
         }
       }
     }
@@ -30,6 +30,6 @@ const machine = createMachine({
 
 const service = interpret(machine).start()
 
-;[...Array(1000000).keys()].forEach(() => service.send('TOGGLE'))
+;[...Array(1_000_000).keys()].forEach(() => service.send('TOGGLE'))
 
 log(A, B)
