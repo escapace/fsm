@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable typescript/no-redundant-type-constituents */
+/* eslint-disable typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
 
@@ -11,7 +11,7 @@ export enum TypeAction {
   Action,
   InitialState,
   State,
-  Transition
+  Transition,
 }
 
 export type Placeholder = number | string | symbol
@@ -23,7 +23,7 @@ export type PlaceholderAction<T extends Placeholder = Placeholder> = T
 export interface ActionTransition<
   A = PlaceholderState,
   B = PlaceholderAction,
-  C = PlaceholderState
+  C = PlaceholderState,
 > {
   payload: {
     action: B
@@ -51,8 +51,8 @@ export interface ActionState<T extends PlaceholderState = PlaceholderState> {
 
 export interface ActionAction<
   T extends PlaceholderAction = PlaceholderAction,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _ = unknown
+  // eslint-disable-next-line typescript/no-unused-vars
+  _ = unknown,
 > {
   payload: {
     action: T
@@ -60,9 +60,7 @@ export interface ActionAction<
   type: TypeAction.Action
 }
 
-export interface ActionInitialState<
-  T extends PlaceholderState = PlaceholderState
-> {
+export interface ActionInitialState<T extends PlaceholderState = PlaceholderState> {
   payload: T
   type: TypeAction.InitialState
 }
@@ -92,7 +90,7 @@ export interface StateMachineInitialState {
 
 export interface Model<
   T extends StateMachineAction[] = any[],
-  U extends StateMachineState = StateMachineState
+  U extends StateMachineState = StateMachineState,
 > {
   log: T
   state: U
@@ -104,18 +102,12 @@ export type Fluent<T, K extends number | string | symbol> = {
 
 export type Payload<T extends StateMachineAction> = T['payload']
 
-export type StateMachineReducer<
-  T extends StateMachineState,
-  U extends StateMachineAction
-> = $.Cast<
+export type StateMachineReducer<T extends StateMachineState, U extends StateMachineAction> = $.Cast<
   $.Assign<
     T,
     {
       [TypeAction.Action]: {
-        actions: $.Cons<
-          $.Cast<Payload<U>, ActionAction['payload']>['action'],
-          T['actions']
-        >
+        actions: $.Cons<$.Cast<Payload<U>, ActionAction['payload']>['action'], T['actions']>
       }
       [TypeAction.Context]: {
         context: U extends ActionContext<infer X> ? X : never
@@ -124,10 +116,7 @@ export type StateMachineReducer<
         initial: Payload<U>
       }
       [TypeAction.State]: {
-        states: $.Cons<
-          $.Cast<Payload<U>, ActionState['payload']>['state'],
-          T['states']
-        >
+        states: $.Cons<$.Cast<Payload<U>, ActionState['payload']>['state'], T['states']>
       }
       [TypeAction.Transition]: {}
     }[$.Cast<U['type'], TypeAction>]
@@ -137,36 +126,22 @@ export type StateMachineReducer<
 
 export type Next<
   T extends Model = { log: []; state: StateMachineInitialState },
-  U extends StateMachineAction = never
+  U extends StateMachineAction = never,
 > = StateMachine<
-  $.If<
-    $.Is.Never<U>,
-    T,
-    Model<$.Cons<U, T['log']>, StateMachineReducer<T['state'], U>>
-  >
+  $.If<$.Is.Never<U>, T, Model<$.Cons<U, T['log']>, StateMachineReducer<T['state'], U>>>
 >
 
 export type States<T extends Model> = $.Values<T['state']['states']>
 export type Actions<T extends Model> = $.Values<T['state']['actions']>
 
 export type Input<T extends Model, U extends Actions<T>> =
-  Extract<$.Values<T['log']>, ActionAction<U, any>> extends ActionAction<
-    U,
-    infer E
-  >
-    ? E
-    : never
+  Extract<$.Values<T['log']>, ActionAction<U, any>> extends ActionAction<U, infer E> ? E : never
 
 export interface Change<T extends Model = Model> {
   action: T['log'] extends ArrayLike<infer U1>
     ? U1 extends { payload: infer U2; type: TypeAction.Transition }
       ? U2 extends { action: infer B; source: infer A; target: infer C }
-        ? Action<
-            T,
-            $.Cast<A, States<T>>,
-            $.Cast<B, Actions<T>>,
-            $.Cast<C, States<T>>
-          >
+        ? Action<T, $.Cast<A, States<T>>, $.Cast<B, Actions<T>>, $.Cast<C, States<T>>>
         : never
       : never
     : never
@@ -192,14 +167,15 @@ export interface StateMachineService<T extends Model = Model> {
 export type Cast<T extends InteropStateMachine> =
   T extends InteropStateMachine<Model<infer A, infer B>> ? Model<A, B> : never
 
-export type ReadonlyStateMachineService<T extends StateMachineService> =
-  Readonly<Fluent<T, 'context' | 'state'>>
+export type ReadonlyStateMachineService<T extends StateMachineService> = Readonly<
+  Fluent<T, 'context' | 'state'>
+>
 
 export interface Action<
   T extends Model = Model,
   A extends States<T> = States<T>,
   B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>
+  C extends States<T> = States<T>,
 > {
   payload: Input<T, B>
   source: A
@@ -211,21 +187,15 @@ export type Predicate<
   T extends Model,
   A extends States<T> = States<T>,
   B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>
-> = (
-  context: Readonly<T['state']['context']>,
-  action: Action<T, A, B, C>
-) => boolean
+  C extends States<T> = States<T>,
+> = (context: Readonly<T['state']['context']>, action: Action<T, A, B, C>) => boolean
 
 export type Reducer<
   T extends Model,
   A extends States<T> = States<T>,
   B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>
-> = (
-  context: T['state']['context'],
-  action: Action<T, A, B, C>
-) => T['state']['context']
+  C extends States<T> = States<T>,
+> = (context: T['state']['context'], action: Action<T, A, B, C>) => T['state']['context']
 
 export interface InteropStateMachine<T extends Model = Model> {
   [SYMBOL_LOG]: T['log']
@@ -234,23 +204,19 @@ export interface InteropStateMachine<T extends Model = Model> {
 
 export interface StateMachine<T extends Model> extends InteropStateMachine<T> {
   action: <U extends PlaceholderAction, C = never>(
-    action: Exclude<U, Actions<T>>
+    action: Exclude<U, Actions<T>>,
     // ...context: $.If<$.Is.Never<C>, never, [C | (() => C)]>
   ) => Fluent<Next<T, ActionAction<U, C>>, 'action' | 'context' | 'transition'>
-  context: <U = never>(
-    context: (() => U) | U
-  ) => Fluent<Next<T, ActionContext<U>>, 'transition'>
-  initial: <U extends States<T>>(
-    states: U
-  ) => Fluent<Next<T, ActionInitialState<U>>, 'action'>
+  context: <U = never>(context: (() => U) | U) => Fluent<Next<T, ActionContext<U>>, 'transition'>
+  initial: <U extends States<T>>(states: U) => Fluent<Next<T, ActionInitialState<U>>, 'action'>
   state: <U extends PlaceholderState>(
-    state: Exclude<U, States<T>>
+    state: Exclude<U, States<T>>,
   ) => Fluent<Next<T, ActionState<U>>, 'initial' | 'state'>
   transition: <A extends States<T>, B extends Actions<T>, C extends States<T>>(
     source: A | A[],
     action: [B, ...Array<Predicate<T, A, B, C>>] | B,
     target: C | C[],
-    reducer?: Reducer<T, A, B, C>
+    reducer?: Reducer<T, A, B, C>,
   ) => Fluent<
     Next<T, ActionTransition<A, B, C>>,
     'transition' | typeof SYMBOL_LOG | typeof SYMBOL_STATE

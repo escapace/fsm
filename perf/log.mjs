@@ -1,16 +1,6 @@
-import {
-  median,
-  mean,
-  min,
-  max,
-  standardDeviation
-} from 'simple-statistics'
+import { max, mean, median, min, standardDeviation } from 'simple-statistics'
 
-const diff = (A, B) => {
-  return A.map((value, index) => {
-    return (B[index] - value) * 1000
-  })
-}
+const diff = (A, B) => A.map((value, index) => (B[index] - value) * 1000)
 
 export const log = (A, B) => {
   const values = diff(A, B)

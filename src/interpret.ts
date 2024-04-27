@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any */
+/* eslint-disable typescript/consistent-type-assertions, typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
 import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
@@ -11,19 +11,15 @@ import {
   type InteropStateMachine,
   type Placeholder,
   type StateMachineService,
-  type Subscription
+  type Subscription,
 } from './types'
 
-const makeIndice = <T>(value: T[]) =>
-  new Map(value.map((value, index) => [value, index] as const))
+const makeIndice = <T>(value: T[]) => new Map(value.map((value, index) => [value, index] as const))
 
 export const interpret = <T extends InteropStateMachine>(
-  stateMachine: T
+  stateMachine: T,
 ): StateMachineService<Cast<T>> => {
-  if (
-    typeof stateMachine[SYMBOL_STATE] !== 'object' ||
-    stateMachine[SYMBOL_STATE] === null
-  ) {
+  if (typeof stateMachine[SYMBOL_STATE] !== 'object' || stateMachine[SYMBOL_STATE] === null) {
     return NOT_STATE_MACHINE()
   }
 
@@ -32,19 +28,18 @@ export const interpret = <T extends InteropStateMachine>(
     context: contextFactory,
     initial,
     states,
-    transitions: transitionMap
+    transitions: transitionMap,
   } = stateMachine[SYMBOL_STATE]
 
-  let context: unknown =
-    typeof contextFactory === 'function' ? contextFactory() : contextFactory
+  let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
 
   // TODO: move this under stateMachine
   const indiceActions = makeIndice(actions)
   const indiceStates = makeIndice(states)
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line typescript/no-non-null-assertion
   let state: Placeholder = initial!
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line typescript/no-non-null-assertion
   let indexState = indiceStates.get(state)!
 
   const subscriptions = new Set<Subscription>()
@@ -72,7 +67,7 @@ export const interpret = <T extends InteropStateMachine>(
         payload,
         source: undefined,
         target: undefined,
-        type: action
+        type: action,
       }
 
       let transitionIndex = 0
@@ -108,9 +103,7 @@ export const interpret = <T extends InteropStateMachine>(
             break
           }
 
-          accumulator = candidate.predicates[
-            candidate.predicates.length - length
-          ](context, _action)
+          accumulator = candidate.predicates[candidate.predicates.length - length](context, _action)
 
           length--
         }
@@ -129,7 +122,7 @@ export const interpret = <T extends InteropStateMachine>(
       }
 
       state = transition.target
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      // eslint-disable-next-line typescript/no-non-null-assertion
       indexState = indiceStates.get(state)!
 
       if (transition.reducer !== undefined) {
@@ -153,9 +146,9 @@ export const interpret = <T extends InteropStateMachine>(
       subscriptions.add(subscription)
 
       return () => subscriptions.delete(subscription)
-    }
+    },
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  // eslint-disable-next-line typescript/no-unsafe-return
   return instance as any
 }

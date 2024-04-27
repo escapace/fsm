@@ -13,19 +13,19 @@ const machine = createMachine({
       on: {
         TOGGLE: {
           actions: () => B.push(performance.now()),
-          target: 'inactive'
-        }
-      }
+          target: 'inactive',
+        },
+      },
     },
     inactive: {
       on: {
         TOGGLE: {
           actions: () => A.push(performance.now()),
-          target: 'active'
-        }
-      }
-    }
-  }
+          target: 'active',
+        },
+      },
+    },
+  },
 })
 
 const service = interpret(machine).start()
