@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "eslint.config.mjs",
+    "{scripts,perf}/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}",
+    "src/**/*.spec.ts",
+    "src/**/example*.ts",
+    "src/index.ts!",
+    "src/types.ts"
+  ],
+  "ignoreDependencies": ["@commitlint/cli", "prettier", "syncpack"],
+  "lefthook": {
+    "config": []
+  }
+}

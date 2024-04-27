@@ -1,11 +1,6 @@
-/* eslint-disable @typescript-eslint/prefer-includes, @typescript-eslint/no-explicit-any */
+/* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
-import {
-  ACTION_EXISTS,
-  ACTION_UNKNOWN,
-  STATE_EXISTS,
-  STATE_UNKNOWN
-} from './error'
+import { ACTION_EXISTS, ACTION_UNKNOWN, STATE_EXISTS, STATE_UNKNOWN } from './error'
 import { product } from './product'
 import { szudzik } from './szudzik'
 import {
@@ -17,13 +12,13 @@ import {
   type Model,
   type Next,
   type Placeholder,
-  type StateMachineAction
+  type StateMachineAction,
 } from './types'
 
 const reduce = (_model: Model, action: StateMachineAction) => {
   const model = { ..._model }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  // eslint-disable-next-line typescript/no-unsafe-assignment
   model.log = [action, ...model.log]
 
   switch (action.type) {
@@ -34,7 +29,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 
       model.state = {
         ...model.state,
-        states: [...model.state.states, action.payload.state]
+        states: [...model.state.states, action.payload.state],
       }
       break
     }
@@ -45,7 +40,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 
       model.state = {
         ...model.state,
-        actions: [...model.state.actions, action.payload.action]
+        actions: [...model.state.actions, action.payload.action],
       }
 
       break
@@ -53,7 +48,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
     case TypeAction.Context: {
       model.state = {
         ...model.state,
-        context: action.payload.context
+        context: action.payload.context,
       }
 
       break
@@ -80,7 +75,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 
       model.state = {
         ...model.state,
-        transitions: new Map(model.state.transitions)
+        transitions: new Map(model.state.transitions),
       }
 
       const query = model.state.transitions.get(indexTransition)
@@ -107,9 +102,9 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 const state = (model: Model) => (argument: Placeholder) => {
   const next = reduce(model, {
     payload: {
-      state: argument
+      state: argument,
     },
-    type: TypeAction.State
+    type: TypeAction.State,
   })
 
   return { initial: initial(next), state: state(next) }
@@ -118,24 +113,24 @@ const state = (model: Model) => (argument: Placeholder) => {
 const action = (model: Model) => (argument: Placeholder) => {
   const next = reduce(model, {
     payload: {
-      action: argument
+      action: argument,
     },
-    type: TypeAction.Action
+    type: TypeAction.Action,
   })
 
   return {
     action: action(next),
     context: context(next),
-    transition: transition(next)
+    transition: transition(next),
   }
 }
 
 const context = (model: Model) => (argument: unknown) => {
   const next = reduce(model, {
     payload: {
-      context: argument
+      context: argument,
     },
-    type: TypeAction.Context
+    type: TypeAction.Context,
   })
 
   return { transition: transition(next) }
@@ -145,18 +140,14 @@ const transition =
   (model: Model) =>
   (
     source: Placeholder | Placeholder[],
-    action:
-      | [Placeholder, ...Array<(...arguments_: any[]) => boolean>]
-      | Placeholder,
+    action: [Placeholder, ...Array<(...arguments_: any[]) => boolean>] | Placeholder,
     target: Placeholder | Placeholder[],
-    reducer?: (...arguments_: any[]) => unknown
+    reducer?: (...arguments_: any[]) => unknown,
   ) => {
     const ap = Array.isArray(action)
       ? {
           action: action[0],
-          predicates: action.slice(1) as Array<
-            (...arguments_: any[]) => boolean
-          >
+          predicates: action.slice(1) as Array<(...arguments_: any[]) => boolean>,
         }
       : { action, predicates: [] }
 
@@ -166,31 +157,33 @@ const transition =
 
     const next = product(
       Array.isArray(source) ? source : [source],
-      Array.isArray(target) ? target : [target]
-    ).reduce<Model>((accumulator, [source, target]) => {
-      return reduce(accumulator, {
-        payload: {
-          reducer,
-          source,
-          target,
-          ...ap
-        },
-        type: TypeAction.Transition
-      })
-    }, model)
+      Array.isArray(target) ? target : [target],
+    ).reduce<Model>(
+      (accumulator, [source, target]) =>
+        reduce(accumulator, {
+          payload: {
+            reducer,
+            source,
+            target,
+            ...ap,
+          },
+          type: TypeAction.Transition,
+        }),
+      model,
+    )
 
     return {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      // eslint-disable-next-line typescript/no-unsafe-assignment
       [SYMBOL_LOG]: [...next.log],
       [SYMBOL_STATE]: { ...next.state },
-      transition: transition(next)
+      transition: transition(next),
     }
   }
 
 const initial = (model: Model) => (argument: Placeholder) => {
   const next = reduce(model, {
     payload: argument,
-    type: TypeAction.InitialState
+    type: TypeAction.InitialState,
   })
 
   return { action: action(next) }
@@ -204,9 +197,7 @@ export const stateMachine = (
       context: undefined,
       initial: undefined,
       states: [],
-      transitions: new Map()
-    }
-  }
-): Fluent<Next, 'state'> => {
-  return { state: state(model) } as unknown as Fluent<Next, 'state'>
-}
+      transitions: new Map(),
+    },
+  },
+): Fluent<Next, 'state'> => ({ state: state(model) }) as unknown as Fluent<Next, 'state'>
