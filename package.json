@@ -8,7 +8,7 @@
   },
   "bugs": "https://github.com/escapace/fsm/issues",
   "dependencies": {
-    "@escapace/typelevel": "^2.0.1"
+    "@escapace/typelevel": "^2.0.2"
   },
   "devDependencies": {
     "@commitlint/cli": "19.3.0",
