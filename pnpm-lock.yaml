@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@escapace/typelevel':
-        specifier: ^2.0.1
+        specifier: ^2.0.2
         version: 2.0.2
     devDependencies:
       '@commitlint/cli':
