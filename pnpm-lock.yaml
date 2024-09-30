@@ -37,8 +37,8 @@ importers:
         specifier: 9.11.0
         version: 9.11.0(jiti@1.21.6)
       eslint-config-escapace:
-        specifier: 5.2.1
-        version: 5.2.1(eslint@9.11.0(jiti@1.21.6))(typescript@5.6.2)
+        specifier: 5.2.2
+        version: 5.2.2(eslint@9.11.0(jiti@1.21.6))(typescript@5.6.2)
       esroll:
         specifier: 0.2.0
         version: 0.2.0
@@ -1276,11 +1276,11 @@ packages:
     peerDependencies:
       eslint: '>=6.0.0'
 
-  eslint-config-escapace@5.2.1:
-    resolution: {integrity: sha512-Uw61vw/VWnTo8HWfRg+HapqDXjt/M7kGIhIuutP45U8CkQTEjw52n2V1B0tCzQvjdHsXWREgMjSJNtd2TlW0Ww==}
+  eslint-config-escapace@5.2.2:
+    resolution: {integrity: sha512-cNMlX13wWvU/tlPABc0zpdRVKlDzMFaTCPDTMo+vunWykRKwLACYD19sTc89l4oFPhv9IGzNJqvgYS895WCdsA==}
     engines: {node: '>=20.15.0', pnpm: '>=9.4.0'}
     peerDependencies:
-      eslint: '>=9.10.0'
+      eslint: '>=9.11.0'
 
   eslint-config-flat-gitignore@0.3.0:
     resolution: {integrity: sha512-0Ndxo4qGhcewjTzw52TK06Mc00aDtHNTdeeW2JfONgDcLkRO/n/BteMRzNVpLQYxdCC/dFEilfM9fjjpGIJ9Og==}
@@ -3944,7 +3944,7 @@ snapshots:
       eslint: 9.11.0(jiti@1.21.6)
       semver: 7.6.3
 
-  eslint-config-escapace@5.2.1(eslint@9.11.0(jiti@1.21.6))(typescript@5.6.2):
+  eslint-config-escapace@5.2.2(eslint@9.11.0(jiti@1.21.6))(typescript@5.6.2):
     dependencies:
       '@stylistic/eslint-plugin': 2.8.0(eslint@9.11.0(jiti@1.21.6))(typescript@5.6.2)
       eslint: 9.11.0(jiti@1.21.6)
