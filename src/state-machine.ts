@@ -22,17 +22,6 @@ const reduce = (_model: Model, action: StateMachineAction) => {
   model.log = [action, ...model.log]
 
   switch (action.type) {
-    case TypeAction.State: {
-      if (model.state.states.indexOf(action.payload.state) !== -1) {
-        return STATE_EXISTS()
-      }
-
-      model.state = {
-        ...model.state,
-        states: [...model.state.states, action.payload.state],
-      }
-      break
-    }
     case TypeAction.Action: {
       if (model.state.actions.indexOf(action.payload.action) !== -1) {
         return ACTION_EXISTS()
@@ -59,6 +48,17 @@ const reduce = (_model: Model, action: StateMachineAction) => {
       }
 
       model.state = { ...model.state, initial: action.payload }
+      break
+    }
+    case TypeAction.State: {
+      if (model.state.states.indexOf(action.payload.state) !== -1) {
+        return STATE_EXISTS()
+      }
+
+      model.state = {
+        ...model.state,
+        states: [...model.state.states, action.payload.state],
+      }
       break
     }
     case TypeAction.Transition: {
@@ -140,7 +140,7 @@ const transition =
   (model: Model) =>
   (
     source: Placeholder | Placeholder[],
-    action: [Placeholder, ...Array<(...arguments_: any[]) => boolean>] | Placeholder,
+    action: Placeholder | [Placeholder, ...Array<(...arguments_: any[]) => boolean>],
     target: Placeholder | Placeholder[],
     reducer?: (...arguments_: any[]) => unknown,
   ) => {

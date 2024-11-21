@@ -1,3 +1,4 @@
+/* eslint-disable typescript/no-empty-object-type */
 /* eslint-disable typescript/no-redundant-type-constituents */
 /* eslint-disable typescript/no-explicit-any */
 
@@ -49,11 +50,7 @@ export interface ActionState<T extends PlaceholderState = PlaceholderState> {
   type: TypeAction.State
 }
 
-export interface ActionAction<
-  T extends PlaceholderAction = PlaceholderAction,
-  // eslint-disable-next-line typescript/no-unused-vars
-  _ = unknown,
-> {
+export interface ActionAction<T extends PlaceholderAction = PlaceholderAction, _ = unknown> {
   payload: {
     action: T
   }
@@ -75,9 +72,9 @@ export type StateMachineAction =
 export interface StateMachineState {
   actions: PlaceholderAction[]
   context: (() => unknown) | unknown
-  initial?: PlaceholderState
   states: PlaceholderState[]
   transitions: Map<number, Array<ActionTransition['payload']>>
+  initial?: PlaceholderState
 }
 
 export interface StateMachineInitialState {
@@ -131,8 +128,8 @@ export type Next<
   $.If<$.Is.Never<U>, T, Model<$.Cons<U, T['log']>, StateMachineReducer<T['state'], U>>>
 >
 
-export type States<T extends Model> = $.Values<T['state']['states']>
 export type Actions<T extends Model> = $.Values<T['state']['actions']>
+export type States<T extends Model> = $.Values<T['state']['states']>
 
 export type Input<T extends Model, U extends Actions<T>> =
   Extract<$.Values<T['log']>, ActionAction<U, any>> extends ActionAction<U, infer E> ? E : never
@@ -149,8 +146,8 @@ export interface Change<T extends Model = Model> {
   state: States<T>
 }
 
-export type Unsubscribe = () => void
 export type Subscription<T extends Model = Model> = (change: Change<T>) => void
+export type Unsubscribe = () => void
 
 export interface StateMachineService<T extends Model = Model> {
   readonly context: T['state']['context']
@@ -214,7 +211,7 @@ export interface StateMachine<T extends Model> extends InteropStateMachine<T> {
   ) => Fluent<Next<T, ActionState<U>>, 'initial' | 'state'>
   transition: <A extends States<T>, B extends Actions<T>, C extends States<T>>(
     source: A | A[],
-    action: [B, ...Array<Predicate<T, A, B, C>>] | B,
+    action: B | [B, ...Array<Predicate<T, A, B, C>>],
     target: C | C[],
     reducer?: Reducer<T, A, B, C>,
   ) => Fluent<

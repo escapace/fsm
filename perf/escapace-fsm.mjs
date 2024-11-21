@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import { interpret, stateMachine } from '../lib/esm/index.mjs'
+import { interpret, stateMachine } from '../lib/neutral/index.js'
 import { log } from './log.mjs'
 
 const A = []

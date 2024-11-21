@@ -1,4 +1,3 @@
-/* eslint-disable typescript/no-unsafe-member-access */
 /* eslint-disable typescript/ban-ts-comment */
 
 import { cloneDeep } from 'lodash-es'

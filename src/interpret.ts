@@ -31,6 +31,7 @@ export const interpret = <T extends InteropStateMachine>(
     transitions: transitionMap,
   } = stateMachine[SYMBOL_STATE]
 
+  // eslint-disable-next-line typescript/no-unsafe-call
   let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
 
   // TODO: move this under stateMachine
