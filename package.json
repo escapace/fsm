@@ -17,7 +17,7 @@
     "@xstate/fsm": "2.1.0",
     "eslint": "9.20.1",
     "eslint-config-escapace": "5.5.1",
-    "esroll": "0.4.1",
+    "esroll": "0.4.2",
     "knip": "5.44.4",
     "lefthook": "1.10.10",
     "lodash-es": "4.17.21",
