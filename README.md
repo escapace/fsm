@@ -13,7 +13,7 @@ Type-safe finite state machine library for TypeScript.
 ## Installation
 
 ```bash
-npm install @escapace/fsm
+pnpm add @escapace/fsm
 ```
 
 ## Example
