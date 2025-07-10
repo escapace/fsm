@@ -15,5 +15,5 @@ export function ACTION_UNKNOWN(): never {
 }
 
 export function NOT_STATE_MACHINE(): never {
-  throw new Error('Paremeter is not a state machine.')
+  throw new Error('Parameter is not a state machine.')
 }
