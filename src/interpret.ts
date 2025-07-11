@@ -16,6 +16,12 @@ import {
 
 const makeIndice = <T>(value: T[]) => new Map(value.map((value, index) => [value, index] as const))
 
+/**
+ * Creates a runnable service instance from a state machine definition.
+ *
+ * @param stateMachine - The state machine definition created by the `stateMachine` function
+ * @returns A service that can execute actions, track state, and notify subscribers
+ */
 export const interpret = <T extends InteropStateMachine>(
   stateMachine: T,
 ): StateMachineService<Cast<T>> => {
@@ -79,21 +85,6 @@ export const interpret = <T extends InteropStateMachine>(
 
         _action.source = candidate.source
         _action.target = candidate.target
-
-        // const cond =
-        //   candidate.predicates.length === 0
-        //     ? true
-        //     : candidate.predicates.reduce(
-        //         (
-        //           accumulator: boolean,
-        //           function_: (...arguments_: any[]) => boolean
-        //         ): boolean => {
-        //           return !accumulator
-        //             ? accumulator
-        //             : function_(context, _action)
-        //         },
-        //         true
-        //       )
 
         let accumulator = true
 

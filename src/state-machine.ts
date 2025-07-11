@@ -189,6 +189,12 @@ const initial = (model: Model) => (argument: Placeholder) => {
   return { action: action(next) }
 }
 
+/**
+ * Creates a state machine definition using a fluent builder pattern.
+ *
+ * @param model - Internal model state, typically not provided by users
+ * @returns A fluent builder interface for defining states, actions, and transitions
+ */
 export const stateMachine = (
   model: Model = {
     log: [],
