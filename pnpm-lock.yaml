@@ -21,9 +21,6 @@ importers:
       '@escapace/pnpm-pack':
         specifier: 0.6.0
         version: 0.6.0(@pnpm/logger@5.2.0)
-      '@escapace/sequentialize':
-        specifier: 4.0.1
-        version: 4.0.1
       '@ls-lint/ls-lint':
         specifier: 2.3.1
         version: 2.3.1
@@ -339,10 +336,6 @@ packages:
     resolution: {integrity: sha512-ZkIbwXm7SpUu17Ju/GpZ37OD5nSN0g4uE9a9rgHVL+IQcqykSiJHJyEUFA0UyJhE6TaOgBKtBO73BE+gONqRIQ==}
     engines: {node: '>=22.13.1', pnpm: '>=10.4.1'}
     hasBin: true
-
-  '@escapace/sequentialize@4.0.1':
-    resolution: {integrity: sha512-+eZLn+VDw+fC1STblVwVJn7oel4DqRLT87TPeEPLNtbZj9oA8bgS6ZXCGjhRMwOIjjbXM0eJ2dJOBOXFkEiPeA==}
-    engines: {pnpm: '>=10.10.0'}
 
   '@escapace/typelevel@2.0.2':
     resolution: {integrity: sha512-ejyBr9bFNQEe2aDYWesn4KfX4OvYoaiPnCzSXrUA/Ox/mLeUahYTLwZIIArFgh2yeJE4jjP5n8aO72a58WrMHA==}
@@ -2956,8 +2949,6 @@ snapshots:
       - '@pnpm/logger'
       - domexception
       - supports-color
-
-  '@escapace/sequentialize@4.0.1': {}
 
   '@escapace/typelevel@2.0.2': {}
 
