@@ -1,7 +1,7 @@
 /* eslint-disable typescript/ban-ts-comment */
 
 import { cloneDeep } from 'lodash-es'
-import { SYMBOL_LOG, SYMBOL_STATE, interpret, stateMachine } from './index'
+import { interpret, STATE_MACHINE_LOG, STATE_MACHINE_STATE, stateMachine } from './index'
 
 import { assert, describe, it, vi } from 'vitest'
 
@@ -108,7 +108,7 @@ describe('./src/index.spec.ts', () => {
   it('api', () => {
     const turnstile = interpret(machine)
 
-    assert.hasAllKeys(machine, ['transition', SYMBOL_LOG, SYMBOL_STATE])
+    assert.hasAllKeys(machine, ['transition', STATE_MACHINE_LOG, STATE_MACHINE_STATE])
     assert.containsAllKeys(turnstile, ['state', 'do', 'subscribe', 'context'])
   })
 

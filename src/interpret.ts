@@ -4,14 +4,14 @@ import type $ from '@escapace/typelevel'
 import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
 import { szudzik } from './szudzik'
 import {
-  SYMBOL_STATE,
-  type Action,
-  type Cast,
-  type Change,
-  type InteropStateMachine,
-  type Placeholder,
+  STATE_MACHINE_STATE,
+  type StateMachineAction,
+  type InferStateMachineModel,
+  type StateMachineChange,
+  type StateMachineInterface,
+  type StateMachineIdentifier,
   type StateMachineService,
-  type Subscription,
+  type StateMachineSubscription,
 } from './types'
 
 const makeIndice = <T>(value: T[]) => new Map(value.map((value, index) => [value, index] as const))
@@ -22,10 +22,13 @@ const makeIndice = <T>(value: T[]) => new Map(value.map((value, index) => [value
  * @param stateMachine - The state machine definition created by the `stateMachine` function
  * @returns A service that can execute actions, track state, and notify subscribers
  */
-export const interpret = <T extends InteropStateMachine>(
+export const interpret = <T extends StateMachineInterface>(
   stateMachine: T,
-): StateMachineService<Cast<T>> => {
-  if (typeof stateMachine[SYMBOL_STATE] !== 'object' || stateMachine[SYMBOL_STATE] === null) {
+): StateMachineService<InferStateMachineModel<T>> => {
+  if (
+    typeof stateMachine[STATE_MACHINE_STATE] !== 'object' ||
+    stateMachine[STATE_MACHINE_STATE] === null
+  ) {
     return NOT_STATE_MACHINE()
   }
 
@@ -35,7 +38,7 @@ export const interpret = <T extends InteropStateMachine>(
     initial,
     states,
     transitions: transitionMap,
-  } = stateMachine[SYMBOL_STATE]
+  } = stateMachine[STATE_MACHINE_STATE]
 
   // eslint-disable-next-line typescript/no-unsafe-call
   let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
@@ -45,11 +48,11 @@ export const interpret = <T extends InteropStateMachine>(
   const indiceStates = makeIndice(states)
 
   // eslint-disable-next-line typescript/no-non-null-assertion
-  let state: Placeholder = initial!
+  let state: StateMachineIdentifier = initial!
   // eslint-disable-next-line typescript/no-non-null-assertion
   let indexState = indiceStates.get(state)!
 
-  const subscriptions = new Set<Subscription>()
+  const subscriptions = new Set<StateMachineSubscription>()
 
   const instance: StateMachineService = {
     get context() {
@@ -70,7 +73,7 @@ export const interpret = <T extends InteropStateMachine>(
         return false
       }
 
-      const _action: Partial<Action> = {
+      const _action: Partial<StateMachineAction> = {
         payload,
         source: undefined,
         target: undefined,
@@ -122,7 +125,7 @@ export const interpret = <T extends InteropStateMachine>(
       }
 
       for (const subscription of subscriptions) {
-        subscription({ action: _action, context, state } as Change)
+        subscription({ action: _action, context, state } as StateMachineChange)
       }
 
       // subscriptions.forEach((subscription) =>
@@ -134,7 +137,7 @@ export const interpret = <T extends InteropStateMachine>(
     get state() {
       return state
     },
-    subscribe(subscription: Subscription) {
+    subscribe(subscription: StateMachineSubscription) {
       subscriptions.add(subscription)
 
       return () => subscriptions.delete(subscription)

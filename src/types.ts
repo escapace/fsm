@@ -4,10 +4,10 @@
 
 import type $ from '@escapace/typelevel'
 
-export const SYMBOL_LOG = Symbol.for('ESCAPACE-FSM-LOG')
-export const SYMBOL_STATE = Symbol.for('ESCAPACE-FSM-STATE')
+export const STATE_MACHINE_LOG = Symbol.for('@escapace/fsm/log')
+export const STATE_MACHINE_STATE = Symbol.for('@escapace/fsm/state')
 
-export enum TypeAction {
+export enum StateMachineBuilderActionType {
   Context,
   Action,
   InitialState,
@@ -15,16 +15,17 @@ export enum TypeAction {
   Transition,
 }
 
-export type Placeholder = number | string | symbol
+export type StateMachineIdentifier = number | string | symbol
+export type StateMachineIdentifierAction<
+  T extends StateMachineIdentifier = StateMachineIdentifier,
+> = T
+export type StateMachineIdentifierState<T extends StateMachineIdentifier = StateMachineIdentifier> =
+  T
 
-export type PlaceholderState<T extends Placeholder = Placeholder> = T
-
-export type PlaceholderAction<T extends Placeholder = Placeholder> = T
-
-export interface ActionTransition<
-  A = PlaceholderState,
-  B = PlaceholderAction,
-  C = PlaceholderState,
+export interface StateMachineBuilderActionTransition<
+  A = StateMachineIdentifierState,
+  B = StateMachineIdentifierAction,
+  C = StateMachineIdentifierState,
 > {
   payload: {
     action: B
@@ -33,189 +34,264 @@ export interface ActionTransition<
     source: A
     target: C
   }
-  type: TypeAction.Transition
+  type: StateMachineBuilderActionType.Transition
 }
 
-export interface ActionContext<T = unknown> {
+export interface StateMachineBuilderActionContext<T = unknown> {
   payload: {
     context: (() => T) | T
   }
-  type: TypeAction.Context
+  type: StateMachineBuilderActionType.Context
 }
 
-export interface ActionState<T extends PlaceholderState = PlaceholderState> {
+export interface StateMachineBuilderActionState<
+  T extends StateMachineIdentifierState = StateMachineIdentifierState,
+> {
   payload: {
     state: T
   }
-  type: TypeAction.State
+  type: StateMachineBuilderActionType.State
 }
 
-export interface ActionAction<T extends PlaceholderAction = PlaceholderAction, _ = unknown> {
+export interface StateMachineBuilderActionAction<
+  T extends StateMachineIdentifierAction = StateMachineIdentifierAction,
+  _ = unknown,
+> {
   payload: {
     action: T
   }
-  type: TypeAction.Action
+  type: StateMachineBuilderActionType.Action
 }
 
-export interface ActionInitialState<T extends PlaceholderState = PlaceholderState> {
+export interface StateMachineBuilderActionInitialState<
+  T extends StateMachineIdentifierState = StateMachineIdentifierState,
+> {
   payload: T
-  type: TypeAction.InitialState
+  type: StateMachineBuilderActionType.InitialState
 }
 
-export type StateMachineAction =
-  | ActionAction
-  | ActionContext
-  | ActionInitialState
-  | ActionState
-  | ActionTransition
+export type StateMachineBuilderAction =
+  | StateMachineBuilderActionAction
+  | StateMachineBuilderActionContext
+  | StateMachineBuilderActionInitialState
+  | StateMachineBuilderActionState
+  | StateMachineBuilderActionTransition
 
-export interface StateMachineState {
-  actions: PlaceholderAction[]
+export interface StateMachineBuilderState {
+  actions: StateMachineIdentifierAction[]
   context: (() => unknown) | unknown
-  states: PlaceholderState[]
-  transitions: Map<number, Array<ActionTransition['payload']>>
-  initial?: PlaceholderState
+  states: StateMachineIdentifierState[]
+  transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>
+  initial?: StateMachineIdentifierState
 }
 
-export interface StateMachineInitialState {
+export interface StateMachineBuilderInitialState {
   actions: []
   context: (() => unknown) | unknown
   initial: undefined
   states: []
-  transitions: Map<number, Array<ActionTransition['payload']>>
+  transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>
 }
 
-export interface Model<
-  T extends StateMachineAction[] = any[],
-  U extends StateMachineState = StateMachineState,
+export interface StateMachineBuilderModel<
+  T extends StateMachineBuilderAction[] = any[],
+  U extends StateMachineBuilderState = StateMachineBuilderState,
 > {
   log: T
   state: U
 }
 
-export type Fluent<T, K extends number | string | symbol> = {
+export type StateMachineBuilder<T, K extends number | string | symbol> = {
   [P in Extract<keyof T, K>]: T[P]
 }
 
-export type Payload<T extends StateMachineAction> = T['payload']
+export type StateMachineBuilderActionPayload<T extends StateMachineBuilderAction> = T['payload']
 
-export type StateMachineReducer<T extends StateMachineState, U extends StateMachineAction> = $.Cast<
+export type StateMachineBuilderReducer<
+  T extends StateMachineBuilderState,
+  U extends StateMachineBuilderAction,
+> = $.Cast<
   $.Assign<
     T,
     {
-      [TypeAction.Action]: {
-        actions: $.Cons<$.Cast<Payload<U>, ActionAction['payload']>['action'], T['actions']>
+      [StateMachineBuilderActionType.Action]: {
+        actions: $.Cons<
+          $.Cast<
+            StateMachineBuilderActionPayload<U>,
+            StateMachineBuilderActionAction['payload']
+          >['action'],
+          T['actions']
+        >
       }
-      [TypeAction.Context]: {
-        context: U extends ActionContext<infer X> ? X : never
+      [StateMachineBuilderActionType.Context]: {
+        context: U extends StateMachineBuilderActionContext<infer X> ? X : never
       }
-      [TypeAction.InitialState]: {
-        initial: Payload<U>
+      [StateMachineBuilderActionType.InitialState]: {
+        initial: StateMachineBuilderActionPayload<U>
       }
-      [TypeAction.State]: {
-        states: $.Cons<$.Cast<Payload<U>, ActionState['payload']>['state'], T['states']>
+      [StateMachineBuilderActionType.State]: {
+        states: $.Cons<
+          $.Cast<
+            StateMachineBuilderActionPayload<U>,
+            StateMachineBuilderActionState['payload']
+          >['state'],
+          T['states']
+        >
       }
-      [TypeAction.Transition]: {}
-    }[$.Cast<U['type'], TypeAction>]
+      [StateMachineBuilderActionType.Transition]: {}
+    }[$.Cast<U['type'], StateMachineBuilderActionType>]
   >,
-  StateMachineState
+  StateMachineBuilderState
 >
 
-export type Next<
-  T extends Model = { log: []; state: StateMachineInitialState },
-  U extends StateMachineAction = never,
+export type StateMachineBuilderStage<
+  T extends StateMachineBuilderModel = { log: []; state: StateMachineBuilderInitialState },
+  U extends StateMachineBuilderAction = never,
 > = StateMachine<
-  $.If<$.Is.Never<U>, T, Model<$.Cons<U, T['log']>, StateMachineReducer<T['state'], U>>>
+  $.If<
+    $.Is.Never<U>,
+    T,
+    StateMachineBuilderModel<$.Cons<U, T['log']>, StateMachineBuilderReducer<T['state'], U>>
+  >
 >
 
-export type Actions<T extends Model> = $.Values<T['state']['actions']>
-export type States<T extends Model> = $.Values<T['state']['states']>
+export type StateMachineActions<T extends StateMachineBuilderModel> = $.Values<
+  T['state']['actions']
+>
+export type StateMachineStates<T extends StateMachineBuilderModel> = $.Values<T['state']['states']>
 
-export type Input<T extends Model, U extends Actions<T>> =
-  Extract<$.Values<T['log']>, ActionAction<U, any>> extends ActionAction<U, infer E> ? E : never
+export type StateMachineActionPayload<
+  T extends StateMachineBuilderModel,
+  U extends StateMachineActions<T>,
+> =
+  Extract<
+    $.Values<T['log']>,
+    StateMachineBuilderActionAction<U, any>
+  > extends StateMachineBuilderActionAction<U, infer E>
+    ? E
+    : never
 
-export interface Change<T extends Model = Model> {
+export interface StateMachineChange<T extends StateMachineBuilderModel = StateMachineBuilderModel> {
   action: T['log'] extends ArrayLike<infer U1>
-    ? U1 extends { payload: infer U2; type: TypeAction.Transition }
+    ? U1 extends { payload: infer U2; type: StateMachineBuilderActionType.Transition }
       ? U2 extends { action: infer B; source: infer A; target: infer C }
-        ? Action<T, $.Cast<A, States<T>>, $.Cast<B, Actions<T>>, $.Cast<C, States<T>>>
+        ? StateMachineAction<
+            T,
+            $.Cast<A, StateMachineStates<T>>,
+            $.Cast<B, StateMachineActions<T>>,
+            $.Cast<C, StateMachineStates<T>>
+          >
         : never
       : never
     : never
   context: Readonly<T['state']['context']>
-  state: States<T>
+  state: StateMachineStates<T>
 }
 
-export type Subscription<T extends Model = Model> = (change: Change<T>) => void
-export type Unsubscribe = () => void
+export type StateMachineSubscription<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+> = (change: StateMachineChange<T>) => void
 
-export interface StateMachineService<T extends Model = Model> {
+export interface StateMachineService<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+> {
   readonly context: T['state']['context']
-  do: <A extends Actions<T>, B extends Input<T, A>>(
+  do: <A extends StateMachineActions<T>, B extends StateMachineActionPayload<T, A>>(
     action: A,
     ...input: $.If<$.Is.Never<B>, [], [B]>
   ) => boolean
-  readonly state: States<T>
-  subscribe: (subscription: Subscription<T>) => Unsubscribe
+  readonly state: StateMachineStates<T>
+  subscribe: (subscription: StateMachineSubscription<T>) => () => void
   // check: <A extends Event<T>>(event: A) => boolean
   // reset(): void
 }
 
-export type Cast<T extends InteropStateMachine> =
-  T extends InteropStateMachine<Model<infer A, infer B>> ? Model<A, B> : never
+export type InferStateMachineModel<T extends StateMachineInterface> =
+  T extends StateMachineInterface<StateMachineBuilderModel<infer A, infer B>>
+    ? StateMachineBuilderModel<A, B>
+    : never
 
-export type ReadonlyStateMachineService<T extends StateMachineService> = Readonly<
-  Fluent<T, 'context' | 'state'>
+export type InferStateMachineService<T extends StateMachineInterface> = StateMachineService<
+  InferStateMachineModel<T>
 >
 
-export interface Action<
-  T extends Model = Model,
-  A extends States<T> = States<T>,
-  B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>,
+// type ReadonlyStateMachineService<T extends StateMachineService> = Readonly<
+//   Fluent<T, 'context' | 'state'>
+// >
+
+export interface StateMachineAction<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+  A extends StateMachineStates<T> = StateMachineStates<T>,
+  B extends StateMachineActions<T> = StateMachineActions<T>,
+  C extends StateMachineStates<T> = StateMachineStates<T>,
 > {
-  payload: Input<T, B>
+  payload: StateMachineActionPayload<T, B>
   source: A
   target: C
   type: B
 }
 
-export type Predicate<
-  T extends Model,
-  A extends States<T> = States<T>,
-  B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>,
-> = (context: Readonly<T['state']['context']>, action: Action<T, A, B, C>) => boolean
+export type StateMachinePredicate<
+  T extends StateMachineBuilderModel,
+  A extends StateMachineStates<T> = StateMachineStates<T>,
+  B extends StateMachineActions<T> = StateMachineActions<T>,
+  C extends StateMachineStates<T> = StateMachineStates<T>,
+> = (context: Readonly<T['state']['context']>, action: StateMachineAction<T, A, B, C>) => boolean
 
-export type Reducer<
-  T extends Model,
-  A extends States<T> = States<T>,
-  B extends Actions<T> = Actions<T>,
-  C extends States<T> = States<T>,
-> = (context: T['state']['context'], action: Action<T, A, B, C>) => T['state']['context']
+export type StateMachineReducer<
+  T extends StateMachineBuilderModel,
+  A extends StateMachineStates<T> = StateMachineStates<T>,
+  B extends StateMachineActions<T> = StateMachineActions<T>,
+  C extends StateMachineStates<T> = StateMachineStates<T>,
+> = (
+  context: T['state']['context'],
+  action: StateMachineAction<T, A, B, C>,
+) => T['state']['context']
 
-export interface InteropStateMachine<T extends Model = Model> {
-  [SYMBOL_LOG]: T['log']
-  [SYMBOL_STATE]: T['state']
+export interface StateMachineInterface<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+> {
+  [STATE_MACHINE_LOG]: T['log']
+  [STATE_MACHINE_STATE]: T['state']
 }
 
-export interface StateMachine<T extends Model> extends InteropStateMachine<T> {
-  action: <U extends PlaceholderAction, C = never>(
-    action: Exclude<U, Actions<T>>,
+export interface StateMachine<T extends StateMachineBuilderModel> extends StateMachineInterface<T> {
+  action: <U extends StateMachineIdentifierAction, C = never>(
+    action: Exclude<U, StateMachineActions<T>>,
     // ...context: $.If<$.Is.Never<C>, never, [C | (() => C)]>
-  ) => Fluent<Next<T, ActionAction<U, C>>, 'action' | 'context' | 'transition'>
-  context: <U = never>(context: (() => U) | U) => Fluent<Next<T, ActionContext<U>>, 'transition'>
-  initial: <U extends States<T>>(states: U) => Fluent<Next<T, ActionInitialState<U>>, 'action'>
-  state: <U extends PlaceholderState>(
-    state: Exclude<U, States<T>>,
-  ) => Fluent<Next<T, ActionState<U>>, 'initial' | 'state'>
-  transition: <A extends States<T>, B extends Actions<T>, C extends States<T>>(
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionAction<U, C>>,
+    'action' | 'context' | 'transition'
+  >
+  context: <U = never>(
+    context: (() => U) | U,
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionContext<U>>,
+    'transition'
+  >
+  initial: <U extends StateMachineStates<T>>(
+    states: U,
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionInitialState<U>>,
+    'action'
+  >
+  state: <U extends StateMachineIdentifierState>(
+    state: Exclude<U, StateMachineStates<T>>,
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionState<U>>,
+    'initial' | 'state'
+  >
+  transition: <
+    A extends StateMachineStates<T>,
+    B extends StateMachineActions<T>,
+    C extends StateMachineStates<T>,
+  >(
     source: A | A[],
-    action: B | [B, ...Array<Predicate<T, A, B, C>>],
+    action: B | [B, ...Array<StateMachinePredicate<T, A, B, C>>],
     target: C | C[],
-    reducer?: Reducer<T, A, B, C>,
-  ) => Fluent<
-    Next<T, ActionTransition<A, B, C>>,
-    'transition' | typeof SYMBOL_LOG | typeof SYMBOL_STATE
+    reducer?: StateMachineReducer<T, A, B, C>,
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionTransition<A, B, C>>,
+    'transition' | typeof STATE_MACHINE_LOG | typeof STATE_MACHINE_STATE
   >
 }

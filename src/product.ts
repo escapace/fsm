@@ -1,8 +1,11 @@
-import type { Placeholder } from './types'
+import type { StateMachineIdentifier } from './types'
 
-export const product = (a: Placeholder[], b: Placeholder[]): Array<[Placeholder, Placeholder]> => {
+export const product = (
+  a: StateMachineIdentifier[],
+  b: StateMachineIdentifier[],
+): Array<[StateMachineIdentifier, StateMachineIdentifier]> => {
   const total = a.length * b.length
-  const product: Array<[Placeholder, Placeholder]> = []
+  const product: Array<[StateMachineIdentifier, StateMachineIdentifier]> = []
 
   const factor = (a.length <= b.length ? Math.max : Math.min)(a.length, b.length)
 

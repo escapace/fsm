@@ -4,25 +4,25 @@ import { ACTION_EXISTS, ACTION_UNKNOWN, STATE_EXISTS, STATE_UNKNOWN } from './er
 import { product } from './product'
 import { szudzik } from './szudzik'
 import {
-  SYMBOL_LOG,
-  SYMBOL_STATE,
-  TypeAction,
-  type ActionTransition,
-  type Fluent,
-  type Model,
-  type Next,
-  type Placeholder,
-  type StateMachineAction,
+  STATE_MACHINE_LOG,
+  STATE_MACHINE_STATE,
+  StateMachineBuilderActionType,
+  type StateMachineBuilder,
+  type StateMachineBuilderAction,
+  type StateMachineBuilderActionTransition,
+  type StateMachineBuilderModel,
+  type StateMachineBuilderStage,
+  type StateMachineIdentifier,
 } from './types'
 
-const reduce = (_model: Model, action: StateMachineAction) => {
+const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
   const model = { ..._model }
 
   // eslint-disable-next-line typescript/no-unsafe-assignment
   model.log = [action, ...model.log]
 
   switch (action.type) {
-    case TypeAction.Action: {
+    case StateMachineBuilderActionType.Action: {
       if (model.state.actions.indexOf(action.payload.action) !== -1) {
         return ACTION_EXISTS()
       }
@@ -34,7 +34,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 
       break
     }
-    case TypeAction.Context: {
+    case StateMachineBuilderActionType.Context: {
       model.state = {
         ...model.state,
         context: action.payload.context,
@@ -42,7 +42,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
 
       break
     }
-    case TypeAction.InitialState: {
+    case StateMachineBuilderActionType.InitialState: {
       if (model.state.states.indexOf(action.payload) === -1) {
         return STATE_UNKNOWN()
       }
@@ -50,7 +50,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
       model.state = { ...model.state, initial: action.payload }
       break
     }
-    case TypeAction.State: {
+    case StateMachineBuilderActionType.State: {
       if (model.state.states.indexOf(action.payload.state) !== -1) {
         return STATE_EXISTS()
       }
@@ -61,7 +61,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
       }
       break
     }
-    case TypeAction.Transition: {
+    case StateMachineBuilderActionType.Transition: {
       const indexAction = model.state.actions.indexOf(action.payload.action)
       const indexSource = model.state.states.indexOf(action.payload.source)
       const indexTarget = model.state.states.indexOf(action.payload.target)
@@ -71,7 +71,7 @@ const reduce = (_model: Model, action: StateMachineAction) => {
       }
 
       const indexTransition = szudzik(indexSource, indexAction)
-      let transitions: Array<ActionTransition['payload']>
+      let transitions: Array<StateMachineBuilderActionTransition['payload']>
 
       model.state = {
         ...model.state,
@@ -99,23 +99,23 @@ const reduce = (_model: Model, action: StateMachineAction) => {
   return model
 }
 
-const state = (model: Model) => (argument: Placeholder) => {
+const state = (model: StateMachineBuilderModel) => (argument: StateMachineIdentifier) => {
   const next = reduce(model, {
     payload: {
       state: argument,
     },
-    type: TypeAction.State,
+    type: StateMachineBuilderActionType.State,
   })
 
   return { initial: initial(next), state: state(next) }
 }
 
-const action = (model: Model) => (argument: Placeholder) => {
+const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdentifier) => {
   const next = reduce(model, {
     payload: {
       action: argument,
     },
-    type: TypeAction.Action,
+    type: StateMachineBuilderActionType.Action,
   })
 
   return {
@@ -125,23 +125,25 @@ const action = (model: Model) => (argument: Placeholder) => {
   }
 }
 
-const context = (model: Model) => (argument: unknown) => {
+const context = (model: StateMachineBuilderModel) => (argument: unknown) => {
   const next = reduce(model, {
     payload: {
       context: argument,
     },
-    type: TypeAction.Context,
+    type: StateMachineBuilderActionType.Context,
   })
 
   return { transition: transition(next) }
 }
 
 const transition =
-  (model: Model) =>
+  (model: StateMachineBuilderModel) =>
   (
-    source: Placeholder | Placeholder[],
-    action: Placeholder | [Placeholder, ...Array<(...arguments_: any[]) => boolean>],
-    target: Placeholder | Placeholder[],
+    source: StateMachineIdentifier | StateMachineIdentifier[],
+    action:
+      | StateMachineIdentifier
+      | [StateMachineIdentifier, ...Array<(...arguments_: any[]) => boolean>],
+    target: StateMachineIdentifier | StateMachineIdentifier[],
     reducer?: (...arguments_: any[]) => unknown,
   ) => {
     const ap = Array.isArray(action)
@@ -158,7 +160,7 @@ const transition =
     const next = product(
       Array.isArray(source) ? source : [source],
       Array.isArray(target) ? target : [target],
-    ).reduce<Model>(
+    ).reduce<StateMachineBuilderModel>(
       (accumulator, [source, target]) =>
         reduce(accumulator, {
           payload: {
@@ -167,23 +169,23 @@ const transition =
             target,
             ...ap,
           },
-          type: TypeAction.Transition,
+          type: StateMachineBuilderActionType.Transition,
         }),
       model,
     )
 
     return {
       // eslint-disable-next-line typescript/no-unsafe-assignment
-      [SYMBOL_LOG]: [...next.log],
-      [SYMBOL_STATE]: { ...next.state },
+      [STATE_MACHINE_LOG]: [...next.log],
+      [STATE_MACHINE_STATE]: { ...next.state },
       transition: transition(next),
     }
   }
 
-const initial = (model: Model) => (argument: Placeholder) => {
+const initial = (model: StateMachineBuilderModel) => (argument: StateMachineIdentifier) => {
   const next = reduce(model, {
     payload: argument,
-    type: TypeAction.InitialState,
+    type: StateMachineBuilderActionType.InitialState,
   })
 
   return { action: action(next) }
@@ -196,7 +198,7 @@ const initial = (model: Model) => (argument: Placeholder) => {
  * @returns A fluent builder interface for defining states, actions, and transitions
  */
 export const stateMachine = (
-  model: Model = {
+  model: StateMachineBuilderModel = {
     log: [],
     state: {
       actions: [],
@@ -206,4 +208,5 @@ export const stateMachine = (
       transitions: new Map(),
     },
   },
-): Fluent<Next, 'state'> => ({ state: state(model) }) as unknown as Fluent<Next, 'state'>
+): StateMachineBuilder<StateMachineBuilderStage, 'state'> =>
+  ({ state: state(model) }) as unknown as StateMachineBuilder<StateMachineBuilderStage, 'state'>
