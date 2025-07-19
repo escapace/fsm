@@ -67,7 +67,7 @@ export const interpret = <T extends InteropStateMachine>(
 
       if (transitions === undefined || transitions.length === 0) {
         // TODO: Strict mode? Silent mode?
-        return
+        return false
       }
 
       const _action: Partial<Action> = {
@@ -110,7 +110,7 @@ export const interpret = <T extends InteropStateMachine>(
 
       if (transition === undefined) {
         // TODO: Strict mode? Silent mode?
-        return
+        return false
       }
 
       state = transition.target
@@ -129,7 +129,7 @@ export const interpret = <T extends InteropStateMachine>(
       //   subscription({ action: _action, context, state } as Change)
       // )
 
-      return
+      return true
     },
     get state() {
       return state

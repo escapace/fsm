@@ -11,6 +11,7 @@
     "@commitlint/cli": "19.8.1",
     "@commitlint/config-conventional": "19.8.1",
     "@escapace/pnpm-pack": "0.6.0",
+    "@escapace/sequentialize": "4.0.1",
     "@ls-lint/ls-lint": "2.3.1",
     "@types/lodash-es": "4.17.12",
     "@vitest/coverage-v8": "3.2.4",

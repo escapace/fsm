@@ -118,5 +118,41 @@ Creates an executable state machine instance.
 
 #### Methods
 
-- `.do(action, payload?)` - Dispatch an action
+- `.do(action, payload?)` - Dispatch an action, returns boolean indicating success
 - `.subscribe(callback)` - Subscribe to state changes
+
+### Action Dispatch Return Values
+
+The `.do()` method returns a boolean that indicates whether the action successfully triggered a state transition:
+
+**Returns `true` when:**
+
+- A valid transition exists for the current state + action combination
+- All transition predicates (if any) evaluate to `true`
+- The state transition executes successfully
+
+**Returns `false` when:**
+
+- No transition is defined for the current state + action combination
+- All transition predicates fail (return `false`)
+
+This return value enables precise control flow based on whether state changes actually occurred.
+
+```typescript
+const machine = stateMachine()
+  .state('idle')
+  .state('working')
+  .initial('idle')
+  .action('start')
+  .action('stop')
+  .transition('idle', 'start', 'working')
+// Note: no 'stop' transition from 'idle'
+
+const service = interpret(machine)
+
+const started = service.do('start') // true - transition succeeds
+console.log(service.state) // 'working'
+
+const stopped = service.do('stop') // false - no transition defined
+console.log(service.state) // still 'working'
+```

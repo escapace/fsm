@@ -481,6 +481,119 @@ describe('./src/index.spec.ts', () => {
     assert.equal(spyObservable.mock.calls.length, 7)
   })
 
+  it('service.do() boolean return values', () => {
+    // Create a focused state machine to test service.do() return values
+    // Based on interpret.ts logic:
+    // - Returns false: No transitions for state+action OR all predicates fail
+    // - Returns true: Valid transition found and executed
+
+    enum TestState {
+      StateA = 'STATE_A',
+      StateB = 'STATE_B',
+    }
+
+    enum TestAction {
+      Always = 'ALWAYS',
+      Conditional = 'CONDITIONAL',
+      Never = 'NEVER',
+      Undefined = 'UNDEFINED', // Won't be defined in machine
+    }
+
+    interface TestContext {
+      counter: number
+    }
+
+    const testMachine = stateMachine()
+      .state(TestState.StateA)
+      .state(TestState.StateB)
+      .initial(TestState.StateA)
+      .action<TestAction.Always>(TestAction.Always)
+      .action<TestAction.Never>(TestAction.Never)
+      .action<TestAction.Conditional, { shouldPass: boolean }>(TestAction.Conditional)
+      .context<TestContext>({ counter: 0 })
+      // Transition that always succeeds (no predicate)
+      .transition(TestState.StateA, TestAction.Always, TestState.StateB)
+      // Transition with predicate that always fails
+      .transition(
+        TestState.StateA,
+        [TestAction.Never, () => false], // Predicate always returns false
+        TestState.StateB,
+      )
+      // Transition with conditional predicate
+      .transition(
+        TestState.StateA,
+        [TestAction.Conditional, (_, action) => action.payload.shouldPass],
+        TestState.StateB,
+      )
+    // Note: No transition defined for TestAction.Undefined
+
+    const testService = interpret(testMachine)
+
+    // Test case 1: Valid transition with no predicate - should return true
+    assert.equal(testService.state, TestState.StateA)
+    const alwaysResult = testService.do(TestAction.Always)
+    assert.equal(alwaysResult, true, 'service.do() should return true for valid transition')
+    assert.equal(
+      testService.state,
+      TestState.StateB,
+      'State should change after successful transition',
+    )
+
+    // Reset to StateA for remaining tests
+    const resetMachine = interpret(testMachine)
+
+    // Test case 2: Transition with failing predicate - should return false
+    const neverResult = resetMachine.do(TestAction.Never)
+    assert.equal(neverResult, false, 'service.do() should return false when predicate fails')
+    assert.equal(
+      resetMachine.state,
+      TestState.StateA,
+      'State should not change when transition fails',
+    )
+
+    // Test case 3: Transition with passing predicate - should return true
+    const conditionalTrueResult = resetMachine.do(TestAction.Conditional, { shouldPass: true })
+    assert.equal(
+      conditionalTrueResult,
+      true,
+      'service.do() should return true when predicate passes',
+    )
+    assert.equal(resetMachine.state, TestState.StateB, 'State should change when predicate passes')
+
+    // Reset again for final test
+    const resetMachine2 = interpret(testMachine)
+
+    // Test case 4: Transition with failing predicate - should return false
+    const conditionalFalseResult = resetMachine2.do(TestAction.Conditional, { shouldPass: false })
+    assert.equal(
+      conditionalFalseResult,
+      false,
+      'service.do() should return false when predicate fails',
+    )
+    assert.equal(
+      resetMachine2.state,
+      TestState.StateA,
+      'State should not change when predicate fails',
+    )
+
+    // Test case 5: Action with no defined transitions - should return false
+    // From StateB, try an action that only has transitions from StateA
+    testService.do(TestAction.Always) // Move to StateB if not already there
+    assert.equal(testService.state, TestState.StateB)
+
+    const noTransitionResult = testService.do(TestAction.Never)
+    assert.equal(
+      noTransitionResult,
+      false,
+      'service.do() should return false when no transitions exist for state+action',
+    )
+    assert.equal(
+      testService.state,
+      TestState.StateB,
+      'State should not change when no transition exists',
+    )
+  })
+
   it('fff', () => {
     assert.throws(() =>
       // @ts-expect-error

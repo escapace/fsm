@@ -154,7 +154,7 @@ export interface StateMachineService<T extends Model = Model> {
   do: <A extends Actions<T>, B extends Input<T, A>>(
     action: A,
     ...input: $.If<$.Is.Never<B>, [], [B]>
-  ) => void
+  ) => boolean
   readonly state: States<T>
   subscribe: (subscription: Subscription<T>) => Unsubscribe
   // check: <A extends Event<T>>(event: A) => boolean
