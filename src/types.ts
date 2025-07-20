@@ -80,6 +80,8 @@ export type StateMachineBuilderAction =
 export interface StateMachineBuilderState {
   actions: StateMachineIdentifierAction[]
   context: (() => unknown) | unknown
+  indiceActions: Map<StateMachineIdentifierAction, number>
+  indiceStates: Map<StateMachineIdentifierState, number>
   states: StateMachineIdentifierState[]
   transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>
   initial?: StateMachineIdentifierState
@@ -88,6 +90,8 @@ export interface StateMachineBuilderState {
 export interface StateMachineBuilderInitialState {
   actions: []
   context: (() => unknown) | unknown
+  indiceActions: Map<StateMachineIdentifierAction, number>
+  indiceStates: Map<StateMachineIdentifierState, number>
   initial: undefined
   states: []
   transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>

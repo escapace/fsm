@@ -1,3 +1,6 @@
+/* eslint-disable typescript/no-unsafe-assignment */
+/* eslint-disable typescript/prefer-for-of */
+/* eslint-disable unicorn/prevent-abbreviations */
 /* eslint-disable typescript/consistent-type-assertions, typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
@@ -5,16 +8,15 @@ import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
 import { szudzik } from './szudzik'
 import {
   STATE_MACHINE_STATE,
-  type StateMachineAction,
   type InferStateMachineModel,
+  type StateMachineAction,
   type StateMachineChange,
-  type StateMachineInterface,
   type StateMachineIdentifier,
+  type StateMachineInterface,
   type StateMachineService,
   type StateMachineSubscription,
 } from './types'
-
-const makeIndice = <T>(value: T[]) => new Map(value.map((value, index) => [value, index] as const))
+import { filter } from './filter'
 
 /**
  * Creates a runnable service instance from a state machine definition.
@@ -33,32 +35,36 @@ export const interpret = <T extends StateMachineInterface>(
   }
 
   const {
-    actions,
     context: contextFactory,
+    indiceActions,
+    indiceStates,
     initial,
-    states,
     transitions: transitionMap,
   } = stateMachine[STATE_MACHINE_STATE]
 
   // eslint-disable-next-line typescript/no-unsafe-call
   let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
 
-  // TODO: move this under stateMachine
-  const indiceActions = makeIndice(actions)
-  const indiceStates = makeIndice(states)
-
   // eslint-disable-next-line typescript/no-non-null-assertion
   let state: StateMachineIdentifier = initial!
   // eslint-disable-next-line typescript/no-non-null-assertion
   let indexState = indiceStates.get(state)!
 
-  const subscriptions = new Set<StateMachineSubscription>()
+  const subscriptions: StateMachineSubscription[] = []
+
+  // Pre-allocate action object to avoid repeated allocations
+  const _action: StateMachineAction = {
+    payload: undefined,
+    source: undefined as any,
+    target: undefined as any,
+    type: undefined as any,
+  }
 
   const instance: StateMachineService = {
     get context() {
       return context
     },
-    // @ts-expect-error fixme
+    // @ts-expect-error types
     do(action, payload) {
       const indexAction = indiceActions.get(action)
 
@@ -73,46 +79,36 @@ export const interpret = <T extends StateMachineInterface>(
         return false
       }
 
-      const _action: Partial<StateMachineAction> = {
-        payload,
-        source: undefined,
-        target: undefined,
-        type: action,
-      }
+      // Reuse pre-allocated action object
+      _action.payload = payload
+      _action.type = action
 
-      let transitionIndex = 0
       let transition: $.Values<typeof transitions> | undefined
 
-      while (transitionIndex < transitions.length) {
-        const candidate = transitions[transitionIndex]
+      for (let i = 0; i < transitions.length; i++) {
+        const candidate = transitions[i]
 
         _action.source = candidate.source
         _action.target = candidate.target
 
-        let accumulator = true
+        let predicatesPass = true
+        const predicates = candidate.predicates
 
-        let length = candidate.predicates.length
-
-        while (length > 0) {
-          if (!accumulator) {
+        // Optimized predicate evaluation with for-loop
+        for (let j = 0; j < predicates.length; j++) {
+          if (!predicates[j](context, _action)) {
+            predicatesPass = false
             break
           }
-
-          accumulator = candidate.predicates[candidate.predicates.length - length](context, _action)
-
-          length--
         }
 
-        if (accumulator) {
+        if (predicatesPass) {
           transition = candidate
           break
         }
-
-        transitionIndex++
       }
 
       if (transition === undefined) {
-        // TODO: Strict mode? Silent mode?
         return false
       }
 
@@ -124,13 +120,13 @@ export const interpret = <T extends StateMachineInterface>(
         context = transition.reducer(context, _action)
       }
 
-      for (const subscription of subscriptions) {
-        subscription({ action: _action, context, state } as StateMachineChange)
+      // Early exit if no subscriptions to avoid object creation
+      if (subscriptions.length > 0) {
+        const change = { action: _action, context, state } as StateMachineChange
+        for (let i = 0; i < subscriptions.length; i++) {
+          subscriptions[i](change)
+        }
       }
-
-      // subscriptions.forEach((subscription) =>
-      //   subscription({ action: _action, context, state } as Change)
-      // )
 
       return true
     },
@@ -138,9 +134,13 @@ export const interpret = <T extends StateMachineInterface>(
       return state
     },
     subscribe(subscription: StateMachineSubscription) {
-      subscriptions.add(subscription)
+      if (!subscriptions.includes(subscription)) {
+        subscriptions.push(subscription)
+      }
 
-      return () => subscriptions.delete(subscription)
+      return () => {
+        filter(subscriptions, (value) => value !== subscription)
+      }
     },
   }
 

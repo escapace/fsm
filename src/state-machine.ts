@@ -9,17 +9,13 @@ import {
   StateMachineBuilderActionType,
   type StateMachineBuilder,
   type StateMachineBuilderAction,
-  type StateMachineBuilderActionTransition,
   type StateMachineBuilderModel,
   type StateMachineBuilderStage,
   type StateMachineIdentifier,
 } from './types'
 
-const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
-  const model = { ..._model }
-
-  // eslint-disable-next-line typescript/no-unsafe-assignment
-  model.log = [action, ...model.log]
+const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
+  model.log.unshift(action)
 
   switch (action.type) {
     case StateMachineBuilderActionType.Action: {
@@ -27,18 +23,13 @@ const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAct
         return ACTION_EXISTS()
       }
 
-      model.state = {
-        ...model.state,
-        actions: [...model.state.actions, action.payload.action],
-      }
+      model.state.actions.push(action.payload.action)
+      model.state.indiceActions.set(action.payload.action, model.state.actions.length - 1)
 
       break
     }
     case StateMachineBuilderActionType.Context: {
-      model.state = {
-        ...model.state,
-        context: action.payload.context,
-      }
+      model.state.context = action.payload.context
 
       break
     }
@@ -47,7 +38,7 @@ const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAct
         return STATE_UNKNOWN()
       }
 
-      model.state = { ...model.state, initial: action.payload }
+      model.state.initial = action.payload
       break
     }
     case StateMachineBuilderActionType.State: {
@@ -55,10 +46,8 @@ const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAct
         return STATE_EXISTS()
       }
 
-      model.state = {
-        ...model.state,
-        states: [...model.state.states, action.payload.state],
-      }
+      model.state.states.push(action.payload.state)
+      model.state.indiceStates.set(action.payload.state, model.state.states.length - 1)
       break
     }
     case StateMachineBuilderActionType.Transition: {
@@ -71,26 +60,15 @@ const reduce = (_model: StateMachineBuilderModel, action: StateMachineBuilderAct
       }
 
       const indexTransition = szudzik(indexSource, indexAction)
-      let transitions: Array<StateMachineBuilderActionTransition['payload']>
-
-      model.state = {
-        ...model.state,
-        transitions: new Map(model.state.transitions),
-      }
-
       const query = model.state.transitions.get(indexTransition)
 
       if (query === undefined) {
-        transitions = [action.payload]
+        model.state.transitions.set(indexTransition, [action.payload])
       } else {
-        transitions = [...query]
-
-        if (transitions.indexOf(action.payload) === -1) {
-          transitions.push(action.payload)
+        if (query.indexOf(action.payload) === -1) {
+          query.push(action.payload)
         }
       }
-
-      model.state.transitions.set(indexTransition, transitions)
 
       break
     }
@@ -175,9 +153,8 @@ const transition =
     )
 
     return {
-      // eslint-disable-next-line typescript/no-unsafe-assignment
-      [STATE_MACHINE_LOG]: [...next.log],
-      [STATE_MACHINE_STATE]: { ...next.state },
+      [STATE_MACHINE_LOG]: next.log,
+      [STATE_MACHINE_STATE]: next.state,
       transition: transition(next),
     }
   }
@@ -203,6 +180,8 @@ export const stateMachine = (
     state: {
       actions: [],
       context: undefined,
+      indiceActions: new Map(),
+      indiceStates: new Map(),
       initial: undefined,
       states: [],
       transitions: new Map(),

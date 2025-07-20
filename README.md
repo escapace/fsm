@@ -99,6 +99,8 @@ console.log(turnstile.state) // 'LOCKED'
 
 Creates a new state machine builder.
 
+**⚠️ Important: The builder pattern uses mutation for performance optimization. Each method call modifies the internal state directly rather than creating new objects. This means the builder is not immutable.**
+
 #### Methods
 
 - `.state(name)` - Define a state
