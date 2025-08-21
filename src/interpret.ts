@@ -4,8 +4,8 @@
 /* eslint-disable typescript/consistent-type-assertions, typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
+import { remove, szudzik } from 'coastal'
 import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
-import { szudzik } from './szudzik'
 import {
   STATE_MACHINE_STATE,
   type InferStateMachineModel,
@@ -16,7 +16,6 @@ import {
   type StateMachineService,
   type StateMachineSubscription,
 } from './types'
-import { filter } from './filter'
 
 /**
  * Creates a runnable service instance from a state machine definition.
@@ -139,7 +138,7 @@ export const interpret = <T extends StateMachineInterface>(
       }
 
       return () => {
-        filter(subscriptions, (value) => value !== subscription)
+        remove(subscriptions, (value) => value === subscription)
       }
     },
   }

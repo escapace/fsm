@@ -2,7 +2,7 @@
 
 import { ACTION_EXISTS, ACTION_UNKNOWN, STATE_EXISTS, STATE_UNKNOWN } from './error'
 import { product } from './product'
-import { szudzik } from './szudzik'
+import { szudzik } from 'coastal'
 import {
   STATE_MACHINE_LOG,
   STATE_MACHINE_STATE,

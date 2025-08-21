@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
+    "{scripts,perf}/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}",
     "**/*.{test,spec}.?(c|m)[jt]s?(x)",
     "**/test/**/*.?(c|m)[jt]s?(x)",
     "eslint.config.mjs",
@@ -9,11 +10,10 @@
     "src/index.ts!",
     "src/types.ts",
     "vitest.config.*.ts",
-    "vitest.config.ts",
-    "{scripts,perf}/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"
+    "vitest.config.ts"
   ],
   "ignore": ["**/*.d.+([a-zA-Z0-9]).ts", "**/*.d.ts", "lib/**"],
-  "ignoreBinaries": ["ncu"],
+  "ignoreBinaries": ["ncu", "taze"],
   "ignoreDependencies": [
     "@commitlint/cli",
     "@microsoft/api-extractor",

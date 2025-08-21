@@ -24,7 +24,7 @@ jobs:
     with:
       enable-artifact-upload: true
       enable-codecov: ${{ !github.event.repository.private }}
-      enable-github-pages: ${{ needs.context.outputs.github-pages }}
+      enable-github-pages: ${{ fromJSON(needs.context.outputs.github-pages) }}
       github-pages-path: ${{ needs.context.outputs.github-pages-path }}
       node-version: ${{ needs.context.outputs.node-version }}
       pnpm-version: ${{ needs.context.outputs.pnpm-version }}
