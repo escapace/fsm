@@ -194,7 +194,7 @@ export interface StateMachineChange<T extends StateMachineBuilderModel = StateMa
 
 export type StateMachineSubscription<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
-> = (change: StateMachineChange<T>) => void
+> = (change: Readonly<StateMachineChange<T>>) => void
 
 export interface StateMachineService<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
