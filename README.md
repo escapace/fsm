@@ -8,7 +8,7 @@ Type-safe finite state machine library for TypeScript.
 - Conditional transitions with predicates
 - Context management with reducers
 - State change subscriptions
-- High-frequency transition performance (8x faster than @xstate/fsm)
+- High-frequency transition performance (7-17x faster than @xstate/fsm)
 
 ## Installation
 
@@ -92,6 +92,10 @@ console.log(turnstile.state) // 'UNLOCKED'
 turnstile.do(Action.Push) // Push through turnstile
 console.log(turnstile.state) // 'LOCKED'
 ```
+
+## Performance
+
+Benchmark results from 1,000,000 state transitions show escapace-fsm runs 2-2.5x slower than a hand-coded state machine using basic JavaScript constructs—variables, conditionals, and direct property access without library abstractions, type checking, or validation. This slowdown represents the cost of state machine abstraction layer. Relative to @xstate/fsm, escapace-fsm processes transitions 7x faster at median, 9x faster at p95, and 17x faster at p99. The overhead becomes measurable only in tight loops processing millions of transitions. For typical application usage—handling user interactions, coordinating async operations, managing UI state—the overhead is negligible.
 
 ## API
 

@@ -1,7 +1,6 @@
-/* eslint-disable typescript/no-unsafe-assignment */
-/* eslint-disable typescript/prefer-for-of */
+/* eslint-disable no-labels */
 /* eslint-disable unicorn/prevent-abbreviations */
-/* eslint-disable typescript/consistent-type-assertions, typescript/no-explicit-any */
+/* eslint-disable typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
 import { remove, szudzik } from 'coastal'
@@ -43,21 +42,24 @@ export const interpret = <T extends StateMachineInterface>(
 
   // eslint-disable-next-line typescript/no-unsafe-call
   let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
-
-  // eslint-disable-next-line typescript/no-non-null-assertion
   let state: StateMachineIdentifier = initial!
-  // eslint-disable-next-line typescript/no-non-null-assertion
   let indexState = indiceStates.get(state)!
-
   const subscriptions: StateMachineSubscription[] = []
 
-  // Pre-allocate action object to avoid repeated allocations
-  const _action: StateMachineAction = {
+  // Pre-allocate action and change objects to avoid repeated allocations
+  const _action = {
     payload: undefined,
-    source: undefined as any,
-    target: undefined as any,
-    type: undefined as any,
-  }
+    source: undefined,
+    target: undefined,
+    type: undefined,
+  } as unknown as StateMachineAction
+
+  type Change = StateMachineChange<InferStateMachineModel<T>>
+  const _change = {
+    action: undefined,
+    context: undefined,
+    state: undefined,
+  } as unknown as Change
 
   const instance: StateMachineService = {
     get context() {
@@ -73,7 +75,7 @@ export const interpret = <T extends StateMachineInterface>(
 
       const transitions = transitionMap.get(szudzik(indexState, indexAction))
 
-      if (transitions === undefined || transitions.length === 0) {
+      if (transitions === undefined) {
         // TODO: Strict mode? Silent mode?
         return false
       }
@@ -84,27 +86,23 @@ export const interpret = <T extends StateMachineInterface>(
 
       let transition: $.Values<typeof transitions> | undefined
 
-      for (let i = 0; i < transitions.length; i++) {
+      candidateLoop: for (let i = 0; i < transitions.length; i++) {
         const candidate = transitions[i]
 
         _action.source = candidate.source
         _action.target = candidate.target
 
-        let predicatesPass = true
         const predicates = candidate.predicates
 
         // Optimized predicate evaluation with for-loop
         for (let j = 0; j < predicates.length; j++) {
           if (!predicates[j](context, _action)) {
-            predicatesPass = false
-            break
+            continue candidateLoop
           }
         }
 
-        if (predicatesPass) {
-          transition = candidate
-          break
-        }
+        transition = candidate
+        break
       }
 
       if (transition === undefined) {
@@ -112,19 +110,18 @@ export const interpret = <T extends StateMachineInterface>(
       }
 
       state = transition.target
-      // eslint-disable-next-line typescript/no-non-null-assertion
       indexState = indiceStates.get(state)!
 
       if (transition.reducer !== undefined) {
         context = transition.reducer(context, _action)
       }
 
-      // Early exit if no subscriptions to avoid object creation
-      if (subscriptions.length > 0) {
-        const change = { action: _action, context, state } as StateMachineChange
-        for (let i = 0; i < subscriptions.length; i++) {
-          subscriptions[i](change)
-        }
+      // Early exit if no subscriptions to avoid object updates
+      _change.action = _action as (typeof _change)['action']
+      _change.context = context as (typeof _change)['context']
+      _change.state = state as (typeof _change)['state']
+      for (let i = 0; i < subscriptions.length; i++) {
+        subscriptions[i](_change)
       }
 
       return true
