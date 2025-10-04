@@ -1,3 +1,7 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - eslint-config-escapace
+
 onlyBuiltDependencies:
   - esbuild
   - lefthook

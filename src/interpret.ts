@@ -1,4 +1,3 @@
-/* eslint-disable no-labels */
 /* eslint-disable unicorn/prevent-abbreviations */
 /* eslint-disable typescript/no-explicit-any */
 
