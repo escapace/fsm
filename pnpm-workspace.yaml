@@ -1,6 +1,8 @@
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - eslint-config-escapace
+  # Renovate security update: lodash-es@4.17.23
+  - lodash-es@4.17.23
 
 onlyBuiltDependencies:
   - esbuild
