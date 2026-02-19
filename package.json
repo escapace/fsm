@@ -26,7 +26,7 @@
     "simple-statistics": "7.8.8",
     "syncpack": "13.0.4",
     "tsx": "4.20.5",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "vitest": "3.2.4"
   },
   "engines": {
