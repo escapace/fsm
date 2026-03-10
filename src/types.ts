@@ -200,11 +200,11 @@ export interface StateMachineService<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > {
   readonly context: T['state']['context']
+  readonly state: StateMachineStates<T>
   do: <A extends StateMachineActions<T>, B extends StateMachineActionPayload<T, A>>(
     action: A,
     ...input: $.If<$.Is.Never<B>, [], [B]>
   ) => boolean
-  readonly state: StateMachineStates<T>
   subscribe: (subscription: StateMachineSubscription<T>) => () => void
   // check: <A extends Event<T>>(event: A) => boolean
   // reset(): void

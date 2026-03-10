@@ -1,6 +1,6 @@
 /* eslint-disable typescript/ban-ts-comment */
 
-import { cloneDeep } from 'lodash-es'
+import { cloneDeep } from 'es-toolkit'
 import { interpret, STATE_MACHINE_LOG, STATE_MACHINE_STATE, stateMachine } from './index'
 
 import { assert, describe, it, vi } from 'vitest'

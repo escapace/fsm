@@ -12,16 +12,16 @@ const machine = createMachine({
     active: {
       on: {
         TOGGLE: {
-          actions: () => B.push(performance.now()),
           target: 'inactive',
+          actions: () => B.push(performance.now()),
         },
       },
     },
     inactive: {
       on: {
         TOGGLE: {
-          actions: () => A.push(performance.now()),
           target: 'active',
+          actions: () => A.push(performance.now()),
         },
       },
     },
