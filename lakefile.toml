@@ -28,4 +28,7 @@ roots = [
   "Reachability",
   "Validity",
   "Expansion",
+  "Compose",
+  "ComposeSoundness",
+  "ComposeAssociativity",
 ]

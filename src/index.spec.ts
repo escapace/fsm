@@ -108,7 +108,7 @@ describe('./src/index.spec.ts', () => {
   it('api', () => {
     const turnstile = interpret(machine)
 
-    assert.hasAllKeys(machine, ['transition', STATE_MACHINE_LOG, STATE_MACHINE_STATE])
+    assert.hasAllKeys(machine, ['compose', 'transition', STATE_MACHINE_LOG, STATE_MACHINE_STATE])
     assert.containsAllKeys(turnstile, ['state', 'do', 'subscribe', 'context'])
   })
 

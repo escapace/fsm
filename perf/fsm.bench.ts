@@ -115,7 +115,7 @@ const escapaceGuardedReducer = interpret(
 )
 
 const xstateGuardedReducer = interpretXState(
-  createMachine({
+  createMachine<CounterContext, ToggleEvent>({
     context: { count: 0 },
     id: 'toggle-guarded-reducer',
     initial: 'inactive',

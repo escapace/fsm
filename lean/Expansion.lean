@@ -41,13 +41,6 @@ private theorem expand_cons (src : State) (rest : List State) (a : Action)
     singleSource src a targets gs rs ++ expand rest a targets gs rs := by
   simp [expand, singleSource, List.flatMap_cons]
 
-/-- Candidates distributes over append. -/
-private theorem candidates_append
-    (l₁ l₂ : List (TransitionRule State Action Ctx Payload))
-    (s : State) (a : Action) :
-    candidates (l₁ ++ l₂) s a = candidates l₁ s a ++ candidates l₂ s a := by
-  simp [candidates, List.filter_append]
-
 /-- All singleSource rules pass the candidate filter for the same source. -/
 private theorem candidates_singleSource_same
     (s : State) (a : Action) (targets : List State)

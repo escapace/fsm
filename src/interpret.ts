@@ -7,7 +7,6 @@ import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
 import {
   STATE_MACHINE_STATE,
   type InferStateMachineModel,
-  type StateMachineAction,
   type StateMachineChange,
   type StateMachineIdentifier,
   type StateMachineInterface,
@@ -45,13 +44,14 @@ export const interpret = <T extends StateMachineInterface>(
   let indexState = indiceStates.get(state)!
   const subscriptions: StateMachineSubscription[] = []
 
-  // Pre-allocate action and change objects to avoid repeated allocations
-  const _action = {
-    payload: undefined,
-    source: undefined,
-    target: undefined,
-    type: undefined,
-  } as unknown as StateMachineAction
+  // Pre-allocated mutable buffers for action/change dispatch — loosely typed
+  // to avoid deep generic resolution on every assignment.
+  const _action: {
+    payload: unknown
+    source: StateMachineIdentifier | undefined
+    target: StateMachineIdentifier | undefined
+    type: StateMachineIdentifier | undefined
+  } = { payload: undefined, source: undefined, target: undefined, type: undefined }
 
   type Change = StateMachineChange<InferStateMachineModel<T>>
   const _change = {
@@ -119,7 +119,7 @@ export const interpret = <T extends StateMachineInterface>(
       _change.context = context as (typeof _change)['context']
       _change.state = state as (typeof _change)['state']
       for (let i = 0; i < subscriptions.length; i++) {
-        subscriptions[i](_change)
+        ;(subscriptions[i] as (change: unknown) => void)(_change)
       }
 
       return true

@@ -13,6 +13,7 @@ export enum StateMachineBuilderActionType {
   InitialState,
   State,
   Transition,
+  Compose,
 }
 
 export type StateMachineIdentifier = number | string | symbol
@@ -70,8 +71,20 @@ export interface StateMachineBuilderActionInitialState<
   type: StateMachineBuilderActionType.InitialState
 }
 
+export interface StateMachineBuilderActionCompose<
+  G extends StateMachineIdentifierState = StateMachineIdentifierState,
+  M extends StateMachineInterface = StateMachineInterface,
+> {
+  payload: {
+    group: G
+    machine: M
+  }
+  type: StateMachineBuilderActionType.Compose
+}
+
 export type StateMachineBuilderAction =
   | StateMachineBuilderActionAction
+  | StateMachineBuilderActionCompose
   | StateMachineBuilderActionContext
   | StateMachineBuilderActionInitialState
   | StateMachineBuilderActionState
@@ -79,6 +92,7 @@ export type StateMachineBuilderAction =
 
 export interface StateMachineBuilderState {
   actions: StateMachineIdentifierAction[]
+  compositions: Map<StateMachineIdentifierState, StateMachineInterface>
   context: (() => unknown) | unknown
   indiceActions: Map<StateMachineIdentifierAction, number>
   indiceStates: Map<StateMachineIdentifierState, number>
@@ -89,6 +103,7 @@ export interface StateMachineBuilderState {
 
 export interface StateMachineBuilderInitialState {
   actions: []
+  compositions: Map<StateMachineIdentifierState, StateMachineInterface>
   context: (() => unknown) | unknown
   indiceActions: Map<StateMachineIdentifierAction, number>
   indiceStates: Map<StateMachineIdentifierState, number>
@@ -111,6 +126,90 @@ export type StateMachineBuilder<T, K extends number | string | symbol> = {
 
 export type StateMachineBuilderActionPayload<T extends StateMachineBuilderAction> = T['payload']
 
+type BaseContext<T> = T extends undefined ? {} : T extends object ? T : {}
+
+export type CompoundContext<
+  ParentContext,
+  Group extends StateMachineIdentifierState,
+  ChildContext,
+> = $.Prettify<{ [K in Group]: ChildContext } & BaseContext<ParentContext>>
+
+// Given an existing context T that may contain composed child slices,
+// and the compositions map, extract child-keyed properties and leave the rest.
+// T['compositions'] is not available at the type level, but the composed keys
+// are those added by CompoundContext. We detect them: any key of T['context']
+// whose value is an object that came from a compose step.
+// Simpler: we just diff T['context'] keys with a fresh empty base.
+// Since compose adds keys and context replaces the base, we preserve
+// all keys from T['context'] that are NOT in X (the new own context).
+type PreserveComposedSlices<ExistingContext, NewOwn> = ExistingContext extends object
+  ? $.Prettify<NewOwn & Pick<ExistingContext, Exclude<keyof ExistingContext, keyof NewOwn>>>
+  : NewOwn
+
+type ChildModelOf<M extends StateMachineInterface> = InferStateMachineModel<M>
+
+type ComposeEntries<P extends StateMachineBuilderModel> = Extract<
+  $.Values<P['log']>,
+  StateMachineBuilderActionCompose<any, any>
+>
+
+type ChildActionsOf<M extends StateMachineInterface> = StateMachineActions<ChildModelOf<M>>
+type ChildStatesOf<M extends StateMachineInterface> = StateMachineStates<ChildModelOf<M>>
+
+type ExistingGroups<P extends StateMachineBuilderModel> =
+  ComposeEntries<P> extends infer U
+    ? U extends StateMachineBuilderActionCompose<infer G>
+      ? G
+      : never
+    : never
+
+type StateActionPayloadMap<S> = S extends { __actionPayloads: infer M }
+  ? $.Cast<M, Record<StateMachineIdentifierAction, unknown>>
+  : {}
+
+type ActionPayloadMap<T extends StateMachineBuilderModel> = StateActionPayloadMap<T['state']>
+
+type ActionPayloadLookup<
+  T extends StateMachineBuilderModel,
+  U extends StateMachineIdentifierAction,
+> = U extends keyof ActionPayloadMap<T> ? ActionPayloadMap<T>[U] : never
+
+type OverlappingActions<
+  P extends StateMachineBuilderModel,
+  M extends StateMachineInterface,
+> = Extract<StateMachineActions<P>, ChildActionsOf<M>>
+
+type IncompatibleOverlappingActions<
+  P extends StateMachineBuilderModel,
+  M extends StateMachineInterface,
+> = {
+  [K in OverlappingActions<P, M>]: [StateMachineActionPayload<P, K>] extends [
+    StateMachineActionPayload<ChildModelOf<M>, K>,
+  ]
+    ? [StateMachineActionPayload<ChildModelOf<M>, K>] extends [StateMachineActionPayload<P, K>]
+      ? never
+      : K
+    : K
+}[OverlappingActions<P, M>]
+
+type HasStateConflict<P extends StateMachineBuilderModel, M extends StateMachineInterface> = [
+  Extract<StateMachineStates<P>, ChildStatesOf<M>>,
+] extends [never]
+  ? false
+  : true
+
+export type ComposePrecondition<
+  P extends StateMachineBuilderModel,
+  G extends StateMachineIdentifierState,
+  M extends StateMachineInterface,
+> = G extends ExistingGroups<P> | StateMachineStates<P>
+  ? never
+  : HasStateConflict<P, M> extends true
+    ? never
+    : [IncompatibleOverlappingActions<P, M>] extends [never]
+      ? unknown
+      : never
+
 export type StateMachineBuilderReducer<
   T extends StateMachineBuilderState,
   U extends StateMachineBuilderAction,
@@ -118,17 +217,32 @@ export type StateMachineBuilderReducer<
   $.Assign<
     T,
     {
-      [StateMachineBuilderActionType.Action]: {
-        actions: $.Cons<
-          $.Cast<
-            StateMachineBuilderActionPayload<U>,
-            StateMachineBuilderActionAction['payload']
-          >['action'],
-          T['actions']
-        >
-      }
+      [StateMachineBuilderActionType.Action]: U extends StateMachineBuilderActionAction<
+        infer A,
+        infer C
+      >
+        ? {
+            __actionPayloads: $.Prettify<$.Assign<StateActionPayloadMap<T>, { [K in A]: C }>>
+            actions: $.Cons<A, T['actions']>
+          }
+        : never
+      [StateMachineBuilderActionType.Compose]: U extends StateMachineBuilderActionCompose<
+        infer G,
+        infer M
+      >
+        ? {
+            __actionPayloads: $.Prettify<
+              $.Assign<StateActionPayloadMap<T>, StateActionPayloadMap<ChildModelOf<M>['state']>>
+            >
+            actions: $.Concat<T['actions'], ChildModelOf<M>['state']['actions']>
+            context: CompoundContext<T['context'], G, ChildModelOf<M>['state']['context']>
+            states: $.Concat<T['states'], ChildModelOf<M>['state']['states']>
+          }
+        : never
       [StateMachineBuilderActionType.Context]: {
-        context: U extends StateMachineBuilderActionContext<infer X> ? X : never
+        context: U extends StateMachineBuilderActionContext<infer X>
+          ? PreserveComposedSlices<T['context'], X>
+          : never
       }
       [StateMachineBuilderActionType.InitialState]: {
         initial: StateMachineBuilderActionPayload<U>
@@ -145,7 +259,7 @@ export type StateMachineBuilderReducer<
       [StateMachineBuilderActionType.Transition]: {}
     }[$.Cast<U['type'], StateMachineBuilderActionType>]
   >,
-  StateMachineBuilderState
+  { __actionPayloads?: Record<StateMachineIdentifierAction, unknown> } & StateMachineBuilderState
 >
 
 export type StateMachineBuilderStage<
@@ -162,30 +276,58 @@ export type StateMachineBuilderStage<
 export type StateMachineActions<T extends StateMachineBuilderModel> = $.Values<
   T['state']['actions']
 >
+export type StateMachineGroups<T extends StateMachineBuilderModel> = ExistingGroups<T>
 export type StateMachineStates<T extends StateMachineBuilderModel> = $.Values<T['state']['states']>
 
 export type StateMachineActionPayload<
   T extends StateMachineBuilderModel,
   U extends StateMachineActions<T>,
-> =
-  Extract<
-    $.Values<T['log']>,
-    StateMachineBuilderActionAction<U, any>
-  > extends StateMachineBuilderActionAction<U, infer E>
-    ? E
+> = ActionPayloadLookup<T, U>
+
+type GroupInitialState<
+  T extends StateMachineBuilderModel,
+  G extends StateMachineIdentifierState,
+> = [ComposeEntries<T>] extends [never]
+  ? never
+  : ComposeEntries<T> extends StateMachineBuilderActionCompose<G, infer M>
+    ? ChildModelOf<M>['state']['initial']
     : never
 
+type ResolveTransitionTarget<T extends StateMachineBuilderModel, C> =
+  C extends ExistingGroups<T> ? GroupInitialState<T, C> : C
+
+type OwnTransitionPayloads<T extends StateMachineBuilderModel> =
+  Extract<$.Values<T['log']>, StateMachineBuilderActionTransition<any, any, any>> extends infer E
+    ? E extends StateMachineBuilderActionTransition<infer A, infer B, infer C>
+      ? {
+          action: B
+          source: A
+          target: ResolveTransitionTarget<T, C>
+        }
+      : never
+    : never
+
+type ComposedTransitionPayloads<T extends StateMachineBuilderModel> = [ComposeEntries<T>] extends [
+  never,
+]
+  ? never
+  : ComposeEntries<T> extends StateMachineBuilderActionCompose<any, infer M>
+    ? TransitionPayloads<ChildModelOf<M>>
+    : never
+
+type TransitionPayloads<T extends StateMachineBuilderModel> =
+  | ComposedTransitionPayloads<T>
+  | OwnTransitionPayloads<T>
+
 export interface StateMachineChange<T extends StateMachineBuilderModel = StateMachineBuilderModel> {
-  action: T['log'] extends ArrayLike<infer U1>
-    ? U1 extends { payload: infer U2; type: StateMachineBuilderActionType.Transition }
-      ? U2 extends { action: infer B; source: infer A; target: infer C }
-        ? StateMachineAction<
-            T,
-            $.Cast<A, StateMachineStates<T>>,
-            $.Cast<B, StateMachineActions<T>>,
-            $.Cast<C, StateMachineStates<T>>
-          >
-        : never
+  action: TransitionPayloads<T> extends infer U1
+    ? U1 extends { action: infer B; source: infer A; target: infer C }
+      ? StateMachineAction<
+          T,
+          $.Cast<A, StateMachineStates<T>>,
+          $.Cast<B, StateMachineActions<T>>,
+          $.Cast<C, StateMachineStates<T>>
+        >
       : never
     : never
   context: Readonly<T['state']['context']>
@@ -265,25 +407,32 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
     // ...context: $.If<$.Is.Never<C>, never, [C | (() => C)]>
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionAction<U, C>>,
-    'action' | 'context' | 'transition'
+    'action' | 'compose' | 'context' | 'transition'
+  >
+  compose: <G extends StateMachineIdentifierState, M extends StateMachineInterface>(
+    group: ([ComposePrecondition<T, G, M>] extends [never] ? never : unknown) & G,
+    machine: M,
+  ) => StateMachineBuilder<
+    StateMachineBuilderStage<T, StateMachineBuilderActionCompose<G, M>>,
+    'action' | 'compose' | 'context' | 'initial' | 'state' | 'transition'
   >
   context: <U = never>(
     context: (() => U) | U,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionContext<U>>,
-    'transition'
+    'compose' | 'transition'
   >
   initial: <U extends StateMachineStates<T>>(
     states: U,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionInitialState<U>>,
-    'action'
+    'action' | 'compose'
   >
   state: <U extends StateMachineIdentifierState>(
     state: Exclude<U, StateMachineStates<T>>,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionState<U>>,
-    'initial' | 'state'
+    'compose' | 'initial' | 'state'
   >
   transition: <
     A extends StateMachineStates<T>,
@@ -292,10 +441,10 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
   >(
     source: A | A[],
     action: B | [B, ...Array<StateMachinePredicate<T, A, B, C>>],
-    target: C | C[],
+    target: Array<C | StateMachineGroups<T>> | (C | StateMachineGroups<T>),
     reducer?: StateMachineReducer<T, A, B, C>,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionTransition<A, B, C>>,
-    'transition' | typeof STATE_MACHINE_LOG | typeof STATE_MACHINE_STATE
+    'compose' | 'transition' | typeof STATE_MACHINE_LOG | typeof STATE_MACHINE_STATE
   >
 }

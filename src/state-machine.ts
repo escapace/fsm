@@ -1,8 +1,16 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
-import { ACTION_EXISTS, ACTION_UNKNOWN, STATE_EXISTS, STATE_UNKNOWN } from './error'
-import { product } from './product'
 import { szudzik } from 'coastal'
+import {
+  ACTION_EXISTS,
+  ACTION_UNKNOWN,
+  COMPOSE_CHILD_INITIAL_REQUIRED,
+  GROUP_EXISTS,
+  NOT_STATE_MACHINE,
+  STATE_EXISTS,
+  STATE_UNKNOWN,
+} from './error'
+import { product } from './product'
 import {
   STATE_MACHINE_LOG,
   STATE_MACHINE_STATE,
@@ -12,7 +20,49 @@ import {
   type StateMachineBuilderModel,
   type StateMachineBuilderStage,
   type StateMachineIdentifier,
+  type StateMachineInterface,
 } from './types'
+
+const CONTEXT_OWN_FACTORY = Symbol.for('@escapace/fsm/context-own-factory')
+
+type ContextFactory = (() => unknown) & {
+  [CONTEXT_OWN_FACTORY]?: unknown
+}
+
+const getOwnFactory = (contextFactory: unknown): unknown => {
+  if (typeof contextFactory !== 'function') {
+    return contextFactory
+  }
+
+  return (contextFactory as ContextFactory)[CONTEXT_OWN_FACTORY] ?? contextFactory
+}
+
+const composeContextFactory = (
+  ownFactory: unknown,
+  compositions: Map<StateMachineIdentifier, StateMachineInterface>,
+): ContextFactory => {
+  const factory: ContextFactory = () => {
+    const own = typeof ownFactory === 'function' ? (ownFactory as () => unknown)() : ownFactory
+
+    const compound: Record<StateMachineIdentifier, unknown> =
+      own !== null && typeof own === 'object'
+        ? (own as Record<StateMachineIdentifier, unknown>)
+        : {}
+
+    for (const [group, child] of compositions.entries()) {
+      const childContext = child[STATE_MACHINE_STATE].context
+
+      compound[group] =
+        typeof childContext === 'function' ? (childContext as () => unknown)() : childContext
+    }
+
+    return compound
+  }
+
+  factory[CONTEXT_OWN_FACTORY] = ownFactory
+
+  return factory
+}
 
 const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
   model.log.unshift(action)
@@ -28,8 +78,120 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
 
       break
     }
+    case StateMachineBuilderActionType.Compose: {
+      const child = action.payload.machine
+
+      const childState = child[STATE_MACHINE_STATE]
+
+      if (childState === undefined || childState === null || typeof childState !== 'object') {
+        return NOT_STATE_MACHINE()
+      }
+
+      if (
+        model.state.compositions.has(action.payload.group) ||
+        model.state.states.indexOf(action.payload.group) !== -1
+      ) {
+        return GROUP_EXISTS()
+      }
+
+      for (const childStateIdentifier of childState.states) {
+        if (childStateIdentifier === action.payload.group) {
+          return GROUP_EXISTS()
+        }
+
+        if (model.state.states.indexOf(childStateIdentifier) !== -1) {
+          return STATE_EXISTS()
+        }
+      }
+
+      // States must be globally unique across parent + all composed children.
+      for (const childStateIdentifier of childState.states) {
+        model.state.states.push(childStateIdentifier)
+        model.state.indiceStates.set(childStateIdentifier, model.state.states.length - 1)
+      }
+
+      // Actions merge by identifier. Runtime cannot distinguish payload-type conflicts,
+      // so incompatibilities are handled at type level.
+      for (const childActionIdentifier of childState.actions) {
+        if (model.state.actions.indexOf(childActionIdentifier) === -1) {
+          model.state.actions.push(childActionIdentifier)
+          model.state.indiceActions.set(childActionIdentifier, model.state.actions.length - 1)
+        }
+      }
+
+      if (childState.initial === undefined) {
+        return COMPOSE_CHILD_INITIAL_REQUIRED()
+      }
+
+      const group = action.payload.group
+
+      model.state.compositions.set(group, child)
+      model.state.context = composeContextFactory(
+        getOwnFactory(model.state.context),
+        model.state.compositions,
+      )
+
+      // Merge child transitions, wrapping guards/reducers to project/inject
+      // through the group's context slice.
+      for (const [, transitions] of childState.transitions.entries()) {
+        for (const transition of transitions) {
+          const predicates =
+            transition.predicates.length === 0
+              ? transition.predicates
+              : transition.predicates.map(
+                  (predicate) =>
+                    (context: Record<StateMachineIdentifier, unknown>, info: unknown) =>
+                      predicate(context[group], info),
+                )
+
+          const reducer =
+            transition.reducer === undefined
+              ? undefined
+              : (context: Record<StateMachineIdentifier, unknown>, info: unknown) => {
+                  context[group] = transition.reducer!(context[group], info)
+
+                  return context
+                }
+
+          const lifted = {
+            action: transition.action,
+            predicates,
+            reducer,
+            source: transition.source,
+            target: transition.target,
+          }
+
+          const indexAction = model.state.actions.indexOf(lifted.action)
+
+          if (indexAction === -1) {
+            return ACTION_UNKNOWN()
+          }
+
+          const indexSource = model.state.states.indexOf(lifted.source)
+          const indexTarget = model.state.states.indexOf(lifted.target)
+
+          if (indexSource === -1 || indexTarget === -1) {
+            return STATE_UNKNOWN()
+          }
+
+          const indexTransition = szudzik(indexSource, indexAction)
+          const query = model.state.transitions.get(indexTransition)
+
+          if (query === undefined) {
+            model.state.transitions.set(indexTransition, [lifted])
+          } else {
+            query.push(lifted)
+          }
+        }
+      }
+
+      break
+    }
     case StateMachineBuilderActionType.Context: {
-      model.state.context = action.payload.context
+      model.state.context =
+        model.state.compositions.size === 0
+          ? action.payload.context
+          : composeContextFactory(getOwnFactory(action.payload.context), model.state.compositions)
 
       break
     }
@@ -51,6 +213,12 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       break
     }
     case StateMachineBuilderActionType.Transition: {
+      const groupMachine = model.state.compositions.get(action.payload.target)
+
+      if (groupMachine !== undefined) {
+        action.payload.target = groupMachine[STATE_MACHINE_STATE].initial!
+      }
+
       const indexAction = model.state.actions.indexOf(action.payload.action)
       const indexSource = model.state.states.indexOf(action.payload.source)
       const indexTarget = model.state.states.indexOf(action.payload.target)
@@ -65,9 +233,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       if (query === undefined) {
         model.state.transitions.set(indexTransition, [action.payload])
       } else {
-        if (query.indexOf(action.payload) === -1) {
-          query.push(action.payload)
-        }
+        query.push(action.payload)
       }
 
       break
@@ -85,7 +251,7 @@ const state = (model: StateMachineBuilderModel) => (argument: StateMachineIdenti
     type: StateMachineBuilderActionType.State,
   })
 
-  return { initial: initial(next), state: state(next) }
+  return { compose: compose(next), initial: initial(next), state: state(next) }
 }
 
 const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdentifier) => {
@@ -98,6 +264,7 @@ const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdent
 
   return {
     action: action(next),
+    compose: compose(next),
     context: context(next),
     transition: transition(next),
   }
@@ -111,8 +278,29 @@ const context = (model: StateMachineBuilderModel) => (argument: unknown) => {
     type: StateMachineBuilderActionType.Context,
   })
 
-  return { transition: transition(next) }
+  return { compose: compose(next), transition: transition(next) }
 }
+
+const compose =
+  (model: StateMachineBuilderModel) =>
+  (group: StateMachineIdentifier, machine: StateMachineInterface) => {
+    const next = reduce(model, {
+      payload: {
+        group,
+        machine,
+      },
+      type: StateMachineBuilderActionType.Compose,
+    })
+
+    return {
+      action: action(next),
+      compose: compose(next),
+      context: context(next),
+      initial: initial(next),
+      state: state(next),
+      transition: transition(next),
+    }
+  }
 
 const transition =
   (model: StateMachineBuilderModel) =>
@@ -142,10 +330,11 @@ const transition =
       (accumulator, [source, target]) =>
         reduce(accumulator, {
           payload: {
+            action: ap.action,
+            predicates: ap.predicates,
             reducer,
             source,
             target,
-            ...ap,
           },
           type: StateMachineBuilderActionType.Transition,
         }),
@@ -153,6 +342,7 @@ const transition =
     )
 
     return {
+      compose: compose(next),
       [STATE_MACHINE_LOG]: next.log,
       [STATE_MACHINE_STATE]: next.state,
       transition: transition(next),
@@ -165,7 +355,7 @@ const initial = (model: StateMachineBuilderModel) => (argument: StateMachineIden
     type: StateMachineBuilderActionType.InitialState,
   })
 
-  return { action: action(next) }
+  return { action: action(next), compose: compose(next) }
 }
 
 /**
@@ -179,6 +369,7 @@ export const stateMachine = (
     log: [],
     state: {
       actions: [],
+      compositions: new Map(),
       context: undefined,
       indiceActions: new Map(),
       indiceStates: new Map(),

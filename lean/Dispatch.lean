@@ -61,6 +61,13 @@ def dispatch [DecidableEq State] [DecidableEq Action]
   else
     .unknownAction
 
+/-- Candidates distributes over list append. -/
+theorem candidates_append [DecidableEq State] [DecidableEq Action]
+    (l₁ l₂ : List (TransitionRule State Action Ctx Payload))
+    (s : State) (a : Action) :
+    candidates (l₁ ++ l₂) s a = candidates l₁ s a ++ candidates l₂ s a := by
+  simp [candidates, List.filter_append]
+
 /-! ### Helper lemmas -/
 
 /-- `allGuardsPass` on an empty guard list is true. -/
