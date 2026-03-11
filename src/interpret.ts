@@ -75,7 +75,6 @@ export const interpret = <T extends StateMachineInterface>(
       const transitions = transitionMap.get(szudzik(indexState, indexAction))
 
       if (transitions === undefined) {
-        // TODO: Strict mode? Silent mode?
         return false
       }
 

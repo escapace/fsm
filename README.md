@@ -1,14 +1,6 @@
 # @escapace/fsm
 
-Type-safe finite state machine library for TypeScript.
-
-## Features
-
-- Type-safe state machine definition and execution
-- Conditional transitions with predicates
-- Context management with reducers
-- State change subscriptions
-- High-frequency transition performance (7-17x faster than @xstate/fsm)
+Flat extended finite state machines for event-driven application logic in TypeScript. A typed builder API keeps states, actions, and payloads explicit, with payload types flowing through dispatch, guards, reducers, and subscriptions.
 
 ## Installation
 
@@ -19,130 +11,90 @@ pnpm add @escapace/fsm
 ## Example
 
 ```typescript
-import { stateMachine, interpret } from '@escapace/fsm'
+import { interpret, stateMachine } from '@escapace/fsm'
 
-// Define coin values and state types
 type Coin = 5 | 10 | 25 | 50
+
 enum State {
   Locked = 'LOCKED',
   Unlocked = 'UNLOCKED',
 }
+
 enum Action {
   Coin = 'COIN',
   Push = 'PUSH',
 }
 
-// Create a turnstile that requires 50 cents to unlock
 const machine = stateMachine()
-  .state(State.Locked) // Define possible states
+  .state(State.Locked)
   .state(State.Unlocked)
-  .initial(State.Locked) // Set starting state
-  .action<Action.Coin, { coin: Coin }>(Action.Coin) // Define action with payload type
-  .action(Action.Push) // Define action without payload
-  .context<{ total: number }>({ total: 0 }) // Set context type and initial value
+  .initial(State.Locked)
+  .action<Action.Coin, { coin: Coin }>(Action.Coin)
+  .action(Action.Push)
+  .context<{ total: number }>({ total: 0 })
   .transition(
-    State.Locked, // From locked state
-    [
-      Action.Coin,
-      (
-        context,
-        action, // On coin insert, with predicate
-      ) => context.total + action.payload.coin >= 50,
-    ],
-    State.Unlocked, // Go to unlocked state
+    State.Locked,
+    [Action.Coin, (context, action) => context.total + action.payload.coin >= 50],
+    State.Unlocked,
     (context, action) => {
-      // Run this reducer
       context.total += action.payload.coin
       return context
     },
   )
-  .transition(
-    State.Locked, // Fallback transition when not enough coins
-    Action.Coin,
-    State.Locked,
-    (context, action) => {
-      // Add coin to total
-      context.total += action.payload.coin
-      return context
-    },
-  )
-  .transition(State.Unlocked, Action.Coin, State.Unlocked) // Stay unlocked on coin insert
-  .transition(
-    [State.Locked, State.Unlocked], // Push always locks
-    Action.Push,
-    State.Locked,
-    (context) => {
-      // Reset total on push
-      context.total = 0
-      return context
-    },
-  )
+  .transition(State.Locked, Action.Coin, State.Locked, (context, action) => {
+    context.total += action.payload.coin
+    return context
+  })
+  .transition(State.Unlocked, Action.Coin, State.Unlocked)
+  .transition([State.Locked, State.Unlocked], Action.Push, State.Locked, (context) => {
+    context.total = 0
+    return context
+  })
 
-// Create and use the state machine
 const turnstile = interpret(machine)
 
+turnstile.do(Action.Coin, { coin: 25 })
 console.log(turnstile.state) // 'LOCKED'
 
-turnstile.do(Action.Coin, { coin: 25 }) // Insert 25 cents
-console.log(turnstile.state) // 'LOCKED'
-
-turnstile.do(Action.Coin, { coin: 25 }) // Insert another 25 cents (total 50)
+turnstile.do(Action.Coin, { coin: 25 })
 console.log(turnstile.state) // 'UNLOCKED'
 
-turnstile.do(Action.Push) // Push through turnstile
+turnstile.do(Action.Push)
 console.log(turnstile.state) // 'LOCKED'
 ```
 
-## Performance
+## What the library guarantees
 
-`@escapace/fsm` shows about 11.5x higher throughput than `@xstate/fsm` in the repository’s representative benchmark (guarded transitions with immutable context updates), while a handwritten baseline is about 7.7x faster than `@escapace/fsm`, indicating the remaining abstraction cost versus direct state updates. These figures come from microbenchmarks run in tight loops in a controlled single-process setup, so they measure transition-dispatch overhead rather than end-to-end application latency.
+For the current flat-machine model, the repository treats these behaviors as the user-facing semantic contract:
 
-## API
+- states and actions must be declared before they are used,
+- candidate transitions are selected by current state and dispatched action,
+- candidate transitions are evaluated in declaration order,
+- guards are evaluated in order and stop at the first failure,
+- the first transition whose guards all pass is selected,
+- reducers run only after a transition has been selected,
+- subscribers are notified only after successful transitions,
+- source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets.
 
-### `stateMachine()`
+## Dispatch behavior
 
-Creates a new state machine builder.
+`interpret(machine)` returns a service with:
 
-**⚠️ Important: The builder pattern uses mutation for performance optimization. Each method call modifies the internal state directly rather than creating new objects. This means the builder is not immutable.**
+- `state` — current state
+- `context` — current context
+- `do(action, payload?)` — dispatches an action
+- `subscribe(callback)` — observes successful transitions
 
-#### Methods
+### `do(action, payload?)`
 
-- `.state(name)` - Define a state
-- `.initial(state)` - Set initial state
-- `.action<Type, Payload>(name)` - Define an action type
-- `.context<Type>(initialValue)` - Set context type and initial value
-- `.transition(source, action, target, reducer?)` - Define state transition
+`do(...)` has three outcomes:
 
-### `interpret(machine)`
+- it returns `true` when a transition is selected and executed,
+- it returns `false` when no transition exists for the current state and action,
+- it returns `false` when transitions exist but all guards fail,
+- it throws when the action is not declared in the machine.
 
-Creates an executable state machine instance.
-
-#### Properties
-
-- `.state` - Current state (readonly)
-- `.context` - Current context (readonly)
-
-#### Methods
-
-- `.do(action, payload?)` - Dispatch an action, returns boolean indicating success
-- `.subscribe(callback)` - Subscribe to state changes
-
-### Action Dispatch Return Values
-
-The `.do()` method returns a boolean that indicates whether the action successfully triggered a state transition:
-
-**Returns `true` when:**
-
-- A valid transition exists for the current state + action combination
-- All transition predicates (if any) evaluate to `true`
-- The state transition executes successfully
-
-**Returns `false` when:**
-
-- No transition is defined for the current state + action combination
-- All transition predicates fail (return `false`)
-
-This return value enables precise control flow based on whether state changes actually occurred.
+Example:
 
 ```typescript
 const machine = stateMachine()
@@ -152,13 +104,54 @@ const machine = stateMachine()
   .action('start')
   .action('stop')
   .transition('idle', 'start', 'working')
-// Note: no 'stop' transition from 'idle'
 
 const service = interpret(machine)
 
-const started = service.do('start') // true - transition succeeds
+service.do('start') // true
 console.log(service.state) // 'working'
 
-const stopped = service.do('stop') // false - no transition defined
-console.log(service.state) // still 'working'
+service.do('stop') // false
+console.log(service.state) // 'working'
 ```
+
+## Known limits and non-goals
+
+These points are worth knowing up front:
+
+- `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail,
+- the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
+- reducers may either mutate the existing context object or return a new one,
+- subscription callbacks are best treated as immediate notifications rather than durable event records; code that needs retained history should copy the received values,
+- the library models flat state machines only; it does not provide hierarchy, parallel regions, history states, or other statechart semantics.
+
+## API
+
+### `stateMachine()`
+
+Creates a machine builder.
+
+#### Methods
+
+- `.state(name)` — declare a state
+- `.initial(state)` — set the initial state
+- `.action<Type, Payload>(name)` — declare an action and optional payload type
+- `.context<Type>(initialValue)` — set the initial context value or factory
+- `.transition(source, action, target, reducer?)` — declare a transition
+
+### `interpret(machine)`
+
+Creates an executable machine service.
+
+#### Properties
+
+- `.state` — current state
+- `.context` — current context
+
+#### Methods
+
+- `.do(action, payload?)` — dispatch an action
+- `.subscribe(callback)` — subscribe to successful transitions
+
+## Performance
+
+`@escapace/fsm` shows about 11.5x higher throughput than `@xstate/fsm` in the repository’s representative benchmark (guarded transitions with immutable context updates), while a handwritten baseline is about 7.7x faster than `@escapace/fsm`, indicating the remaining abstraction cost versus direct state updates. These figures come from microbenchmarks run in tight loops in a controlled single-process setup, so they measure transition-dispatch overhead rather than end-to-end application latency.
