@@ -2,7 +2,7 @@
 import { describe, it } from 'vitest'
 import { interpret, stateMachine, type InferStateMachineModel } from './index'
 import type {
-  ComposePrecondition,
+  StateMachineComposePrecondition,
   StateMachineActionPayload,
   StateMachineActions,
   StateMachineGroups,
@@ -233,7 +233,7 @@ describe('compose type-level', () => {
       .transition('Root', 'Go', 'left')
 
     type P = InferStateMachineModel<typeof parent>
-    type Pre = ComposePrecondition<P, 'right', typeof right>
+    type Pre = StateMachineComposePrecondition<P, 'right', typeof right>
     check<Equal<IsNever<Pre>, false>>()
   })
 
@@ -244,7 +244,7 @@ describe('compose type-level', () => {
     const parent = stateMachine().state('A').initial('A').action<'Y'>('Y').transition('A', 'Y', 'A')
 
     type P = InferStateMachineModel<typeof parent>
-    type Pre = ComposePrecondition<P, 'g', typeof childA>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof childA>
     check<Equal<Pre, never>>()
   })
 
@@ -255,7 +255,7 @@ describe('compose type-level', () => {
     const parent = stateMachine().state('g').initial('g').action<'Y'>('Y').transition('g', 'Y', 'g')
 
     type P = InferStateMachineModel<typeof parent>
-    type Pre = ComposePrecondition<P, 'g', typeof childA>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof childA>
     check<Equal<Pre, never>>()
   })
 
@@ -273,7 +273,7 @@ describe('compose type-level', () => {
       .transition('Root', 'Y', 'g')
 
     type P = InferStateMachineModel<typeof parent>
-    type Pre = ComposePrecondition<P, 'g', typeof childB>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof childB>
     check<Equal<Pre, never>>()
   })
 
@@ -299,7 +299,7 @@ describe('compose type-level', () => {
       .transition('Root', 'Y', 'num')
 
     type P = InferStateMachineModel<typeof parent>
-    type Pre = ComposePrecondition<P, 'str', typeof childString>
+    type Pre = StateMachineComposePrecondition<P, 'str', typeof childString>
     check<Equal<Pre, never>>()
   })
 })
