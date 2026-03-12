@@ -36,7 +36,7 @@ describe('compose type-level', () => {
     .initial('Idle')
     .action<'Start'>('Start')
     .context({ starts: 0 })
-    .transition('Idle', 'Start', 'power')
+    .transition('Idle', 'Start', 'On')
     .transition(['On', 'Off'], 'Start', 'Idle')
 
   type Model = InferStateMachineModel<typeof composed>
@@ -44,6 +44,13 @@ describe('compose type-level', () => {
   // ── Happy path: state set ─────────────────────────────────────────
   it('merged state set is parent ∪ child states', () => {
     check<Equal<StateMachineStates<Model>, 'Idle' | 'Off' | 'On'>>()
+  })
+
+  it('rejects group names as transition targets', () => {
+    type GroupAsState = StateMachineStates<Model>
+    // @ts-expect-error group names are context keys only
+    const _bad: GroupAsState = 'power'
+    void _bad
   })
 
   // ── Happy path: action set ────────────────────────────────────────
@@ -127,7 +134,7 @@ describe('compose type-level', () => {
             return true
           },
         ],
-        'power',
+        'On',
       )
 
     // compile-time only: creation must type-check with the guard signature
@@ -148,7 +155,7 @@ describe('compose type-level', () => {
       .compose('tc', typedChild)
       .initial('Root')
       .action<'Go'>('Go')
-      .transition('Root', 'Go', 'tc')
+      .transition('Root', 'Go', 'X')
 
     type M = InferStateMachineModel<typeof withTypedChild>
     type TP = StateMachineActionPayload<M, 'Typed'>
@@ -182,7 +189,7 @@ describe('compose type-level', () => {
       .compose('tc', typedChild)
       .initial('Root')
       .action<'Go'>('Go')
-      .transition('Root', 'Go', 'tc')
+      .transition('Root', 'Go', 'X')
 
     interpret(machine)
   })
@@ -200,7 +207,7 @@ describe('compose type-level', () => {
       .compose('tc', typedChild)
       .initial('Root')
       .action<'Go'>('Go')
-      .transition('Root', 'Go', 'tc')
+      .transition('Root', 'Go', 'X')
 
     const service = interpret(machine)
 
@@ -212,7 +219,7 @@ describe('compose type-level', () => {
   })
 
   // ── Happy path: same-payload overlap ──────────────────────────────
-  it('composing children with same-payload overlapping actions is allowed', () => {
+  it('precondition rejects when sibling actions overlap even with same payload', () => {
     const left = stateMachine()
       .state('L')
       .initial('L')
@@ -230,10 +237,28 @@ describe('compose type-level', () => {
       .compose('left', left)
       .initial('Root')
       .action<'Go'>('Go')
-      .transition('Root', 'Go', 'left')
+      .transition('Root', 'Go', 'L')
 
     type P = InferStateMachineModel<typeof parent>
     type Pre = StateMachineComposePrecondition<P, 'right', typeof right>
+    check<Equal<Pre, never>>()
+  })
+
+  it('precondition allows parent-declared action overlapping child action', () => {
+    const child = stateMachine()
+      .state('C')
+      .initial('C')
+      .action<'Shared', { value: number }>('Shared')
+      .transition('C', 'Shared', 'C')
+
+    const parent = stateMachine()
+      .state('P')
+      .initial('P')
+      .action<'Shared', { value: number }>('Shared')
+      .transition('P', 'Shared', 'P')
+
+    type P = InferStateMachineModel<typeof parent>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof child>
     check<Equal<IsNever<Pre>, false>>()
   })
 
@@ -270,7 +295,7 @@ describe('compose type-level', () => {
       .compose('g', childA)
       .initial('Root')
       .action<'Y'>('Y')
-      .transition('Root', 'Y', 'g')
+      .transition('Root', 'Y', 'A')
 
     type P = InferStateMachineModel<typeof parent>
     type Pre = StateMachineComposePrecondition<P, 'g', typeof childB>
@@ -296,10 +321,74 @@ describe('compose type-level', () => {
       .compose('num', childNumber)
       .initial('Root')
       .action<'Y'>('Y')
-      .transition('Root', 'Y', 'num')
+      .transition('Root', 'Y', 'N')
 
     type P = InferStateMachineModel<typeof parent>
     type Pre = StateMachineComposePrecondition<P, 'str', typeof childString>
+    check<Equal<Pre, never>>()
+  })
+
+  it('precondition rejects sibling overlap with no-payload actions', () => {
+    const childA = stateMachine()
+      .state('A')
+      .initial('A')
+      .action<'Ping'>('Ping')
+      .transition('A', 'Ping', 'A')
+
+    const childB = stateMachine()
+      .state('B')
+      .initial('B')
+      .action<'Ping'>('Ping')
+      .transition('B', 'Ping', 'B')
+
+    const parent = stateMachine()
+      .state('Root')
+      .compose('a', childA)
+      .initial('Root')
+      .action<'Go'>('Go')
+      .transition('Root', 'Go', 'A')
+
+    type P = InferStateMachineModel<typeof parent>
+    type Pre = StateMachineComposePrecondition<P, 'b', typeof childB>
+    check<Equal<Pre, never>>()
+  })
+
+  it('precondition rejects parent/child overlap with different payload', () => {
+    const child = stateMachine()
+      .state('C')
+      .initial('C')
+      .action<'Act', { v: string }>('Act')
+      .transition('C', 'Act', 'C')
+
+    const parent = stateMachine()
+      .state('P')
+      .initial('P')
+      .action<'Act', { v: number }>('Act')
+      .transition('P', 'Act', 'P')
+
+    type P = InferStateMachineModel<typeof parent>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof child>
+    check<Equal<Pre, never>>()
+  })
+
+  it('precondition rejects when third child overlaps first but not second', () => {
+    const childA = stateMachine().state('A').initial('A').action<'X'>('X').transition('A', 'X', 'A')
+
+    const childB = stateMachine().state('B').initial('B').action<'Y'>('Y').transition('B', 'Y', 'B')
+
+    const childC = stateMachine().state('C').initial('C').action<'X'>('X').transition('C', 'X', 'C')
+
+    const parent = stateMachine()
+      .state('Root')
+      .compose('a', childA)
+      .compose('b', childB)
+      .initial('Root')
+      .action<'Go'>('Go')
+      .transition('Root', 'Go', 'A')
+
+    type P = InferStateMachineModel<typeof parent>
+    // childC's 'X' overlaps childA's 'X'
+    type Pre = StateMachineComposePrecondition<P, 'c', typeof childC>
     check<Equal<Pre, never>>()
   })
 })

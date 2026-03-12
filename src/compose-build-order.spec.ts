@@ -24,7 +24,7 @@ describe('compose build-order edge cases', () => {
       .action<'Start'>('Start')
       .context({ starts: 0 })
       .compose('power', child)
-      .transition('Idle', 'Start', 'power')
+      .transition('Idle', 'Start', 'On')
 
     type Model = InferStateMachineModel<typeof parent>
     interface ExpectedContext {
@@ -76,8 +76,8 @@ describe('compose build-order edge cases', () => {
       .context({ root: 1 })
       .compose('right', childB)
       .action<'EnterRight'>('EnterRight')
-      .transition('Idle', 'EnterLeft', 'left')
-      .transition('Idle', 'EnterRight', 'right')
+      .transition('Idle', 'EnterLeft', 'A1')
+      .transition('Idle', 'EnterRight', 'B1')
 
     type Model = InferStateMachineModel<typeof parent>
     interface ExpectedContext {
@@ -130,7 +130,7 @@ describe('compose build-order edge cases', () => {
         return { p: 0 }
       })
       .compose('child', child)
-      .transition('Idle', 'Start', 'child')
+      .transition('Idle', 'Start', 'C')
 
     const service1 = interpret(machine)
     assert.deepEqual(service1.context, { child: { c: 0 }, p: 0 })

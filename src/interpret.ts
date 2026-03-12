@@ -3,7 +3,7 @@
 
 import type $ from '@escapace/typelevel'
 import { remove, szudzik } from 'coastal'
-import { ACTION_UNKNOWN, NOT_STATE_MACHINE } from './error'
+import { StateMachineError } from './error'
 import {
   STATE_MACHINE_STATE,
   type InferStateMachineModel,
@@ -27,7 +27,7 @@ export const interpret = <T extends StateMachineInterface>(
     typeof stateMachine[STATE_MACHINE_STATE] !== 'object' ||
     stateMachine[STATE_MACHINE_STATE] === null
   ) {
-    return NOT_STATE_MACHINE()
+    throw new StateMachineError({ type: 'NotStateMachine' })
   }
 
   const {
@@ -69,7 +69,7 @@ export const interpret = <T extends StateMachineInterface>(
       const indexAction = indiceActions.get(action)
 
       if (indexAction === undefined) {
-        return ACTION_UNKNOWN()
+        throw new StateMachineError({ identifier: action, type: 'ActionUnknown' })
       }
 
       const transitions = transitionMap.get(szudzik(indexState, indexAction))

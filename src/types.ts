@@ -136,16 +136,29 @@ export type StateMachineActionPayloadsByState<S> = S extends { __actionPayloads:
   ? $.Cast<M, Record<StateMachineIdentifierAction, unknown>>
   : {}
 
-export type StateMachineOverlappingActions<
+export type StateMachineComposedChildActions<P extends StateMachineBuilderModel> =
+  StateMachineComposeLogEntries<P> extends infer U
+    ? U extends StateMachineBuilderActionCompose<any, infer M>
+      ? StateMachineActions<StateMachineChildModelOf<M>>
+      : never
+    : never
+
+// Actions declared by the parent (not introduced by previously composed children)
+// that share a name with an action in the new child.
+export type StateMachineComposeSharedActions<
   P extends StateMachineBuilderModel,
   M extends StateMachineInterface,
-> = Extract<StateMachineActions<P>, StateMachineActions<StateMachineChildModelOf<M>>>
+> = Exclude<
+  Extract<StateMachineActions<P>, StateMachineActions<StateMachineChildModelOf<M>>>,
+  StateMachineComposedChildActions<P>
+>
 
-export type StateMachineIncompatibleOverlappingActions<
+// Among parent/child overlapping actions, find those with incompatible payload types.
+export type StateMachineComposePayloadConflict<
   P extends StateMachineBuilderModel,
   M extends StateMachineInterface,
 > = {
-  [K in StateMachineOverlappingActions<P, M>]: [StateMachineActionPayload<P, K>] extends [
+  [K in StateMachineComposeSharedActions<P, M>]: [StateMachineActionPayload<P, K>] extends [
     StateMachineActionPayload<StateMachineChildModelOf<M>, K>,
   ]
     ? [StateMachineActionPayload<StateMachineChildModelOf<M>, K>] extends [
@@ -154,7 +167,7 @@ export type StateMachineIncompatibleOverlappingActions<
       ? never
       : K
     : K
-}[StateMachineOverlappingActions<P, M>]
+}[StateMachineComposeSharedActions<P, M>]
 
 export type StateMachineComposePrecondition<
   P extends StateMachineBuilderModel,
@@ -165,8 +178,17 @@ export type StateMachineComposePrecondition<
   : [Extract<StateMachineStates<P>, StateMachineStates<StateMachineChildModelOf<M>>>] extends [
         never,
       ]
-    ? [StateMachineIncompatibleOverlappingActions<P, M>] extends [never]
-      ? unknown
+    ? // Reject if child actions overlap any previously composed sibling's actions
+      [
+        Extract<
+          StateMachineComposedChildActions<P>,
+          StateMachineActions<StateMachineChildModelOf<M>>
+        >,
+      ] extends [never]
+      ? // Reject if parent/child overlapping actions have incompatible payloads
+        [StateMachineComposePayloadConflict<P, M>] extends [never]
+        ? unknown
+        : never
       : never
     : never
 
@@ -259,11 +281,7 @@ export type StateMachineTransitionPayloadsOwn<T extends StateMachineBuilderModel
       ? {
           action: B
           source: A
-          target: C extends StateMachineExistingGroups<T>
-            ? StateMachineComposeLogEntries<T> extends StateMachineBuilderActionCompose<C, infer M>
-              ? StateMachineChildStateOf<M>['initial']
-              : never
-            : C
+          target: C
         }
       : never
     : never
@@ -395,7 +413,7 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
   >(
     source: A | A[],
     action: B | [B, ...Array<StateMachinePredicate<T, A, B, C>>],
-    target: Array<C | StateMachineGroups<T>> | (C | StateMachineGroups<T>),
+    target: C | C[],
     reducer?: StateMachineReducer<T, A, B, C>,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionTransition<A, B, C>>,

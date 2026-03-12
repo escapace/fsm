@@ -65,7 +65,7 @@ console.log(turnstile.state) // 'LOCKED'
 
 ## What the library guarantees
 
-For the current flat-machine model, the repository treats these behaviors as the user-facing semantic contract:
+The repository treats these behaviors as the user-facing semantic contract:
 
 - states and actions must be declared before they are used,
 - candidate transitions are selected by current state and dispatched action,
@@ -76,7 +76,8 @@ For the current flat-machine model, the repository treats these behaviors as the
 - subscribers are notified only after successful transitions,
 - source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets,
 - `.compose(group, child)` merges child states/actions/transitions into the same flat machine,
-- targeting a group name in `.transition(...)` resolves to the composed child machine’s `.initial(...)` state.
+- states must be disjoint across parent and all children; actions must be disjoint across composed siblings,
+- group names are context keys only; transitions target explicit state identifiers.
 
 ## Dispatch behavior
 
@@ -125,7 +126,7 @@ These points are worth knowing up front:
 - reducers may either mutate the existing context object or return a new one,
 - subscription callbacks are best treated as immediate notifications rather than durable event records; code that needs retained history should copy the received values,
 - composed machines are still flat at runtime; `.compose(...)` is authoring-time structure, not runtime hierarchy,
-- a composed child machine must declare `.initial(...)` (compose-time validation fails otherwise),
+- group names are not states and cannot be transition targets,
 - the library models flat state machines only; it does not provide hierarchy, parallel regions, history states, or other statechart semantics.
 
 ## API
@@ -141,7 +142,7 @@ Creates a machine builder.
 - `.action<Type, Payload>(name)` — declare an action and optional payload type
 - `.context<Type>(initialValue)` — set the initial context value or factory
 - `.compose(group, childMachine)` — merge a child builder into the current machine (flat semantics)
-- `.transition(source, action, target, reducer?)` — declare a transition (target may be a state or composed group name)
+- `.transition(source, action, target, reducer?)` — declare a transition (target is an explicit state)
 
 ### `interpret(machine)`
 

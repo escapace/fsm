@@ -97,7 +97,7 @@ const buildPaymentMachine = () => {
 
       return context
     })
-    .transition('PaymentAuthorizing', 'StartFraud', 'fraud')
+    .transition('PaymentAuthorizing', 'StartFraud', 'FraudPending')
     .transition('FraudClear', 'Capture', 'PaymentApproved', (context, action) => {
       context.capturedBy = action.payload.processorId
 
@@ -155,7 +155,7 @@ const buildOrderMachine = () => {
           return action.payload.total > 0
         },
       ],
-      'payment',
+      'PaymentIdle',
       (context, action) => {
         context.orderId = action.payload.orderId
         context.total = action.payload.total
@@ -456,6 +456,6 @@ describe('three-tier order orchestration (runtime)', () => {
 
     assert.throws(() => {
       service.do('UNKNOWN_ACTION' as never)
-    }, 'No such action.')
+    }, 'No such action "UNKNOWN_ACTION".')
   })
 })

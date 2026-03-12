@@ -1,5 +1,11 @@
 import { assert, describe, it, vi } from 'vitest'
-import { interpret, stateMachine } from './index'
+import {
+  interpret,
+  isStateMachineError,
+  isStateMachineErrorOfType,
+  StateMachineError,
+  stateMachine,
+} from './index'
 
 describe('Lean tranche alignment (P1–P6)', () => {
   it('P1: dispatch is deterministic for identical machine and action sequence', () => {
@@ -187,7 +193,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
 
     assert.throws(() => {
       service.do('UNKNOWN_ACTION' as never)
-    }, 'No such action.')
+    }, 'No such action "UNKNOWN_ACTION".')
 
     assert.equal(guard.mock.calls.length, 0)
     assert.equal(service.state, S.A)
@@ -245,5 +251,83 @@ describe('Lean tranche alignment (P1–P6)', () => {
     assert.equal(fromBExpanded.do(A.Expand), fromBExplicit.do(A.Expand))
     assert.equal(fromBExpanded.state, fromBExplicit.state)
     assert.equal(fromBExpanded.state, S.C)
+  })
+
+  it('errors are StateMachineError instances with structured cause', () => {
+    try {
+      stateMachine()
+        .state('A')
+        .initial('A')
+        .action('Go')
+        // @ts-expect-error intentional unknown state target
+        .transition('A', 'Go', 'Z')
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.ok(error instanceof StateMachineError)
+      assert.equal(error.name, 'StateMachineError')
+      assert.equal(error.cause.type, 'StateUnknown')
+      assert.equal(error.message, 'No such state "Z".')
+
+      assert.ok(isStateMachineErrorOfType(error, 'StateUnknown'))
+
+      if (isStateMachineErrorOfType(error, 'StateUnknown')) {
+        assert.equal(error.cause.identifier, 'Z')
+      }
+
+      assert.ok(!isStateMachineErrorOfType(error, 'ActionUnknown'))
+    }
+
+    assert.ok(!isStateMachineError(new Error('unrelated')))
+  })
+
+  it('error message formats symbol identifiers', () => {
+    const sym = Symbol('myState')
+
+    try {
+      // @ts-expect-error duplicate symbol state
+      stateMachine().state(sym).state(sym)
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.message, 'State Symbol(myState) already exists.')
+    }
+  })
+
+  it('subscribe deduplicates identical subscription functions', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('Go')
+      .transition('A', 'Go', 'B')
+
+    const service = interpret(machine)
+    let calls = 0
+    const sub = () => {
+      calls++
+    }
+
+    const unsub1 = service.subscribe(sub)
+    const unsub2 = service.subscribe(sub)
+
+    service.do('Go')
+    assert.equal(calls, 1)
+
+    unsub1()
+    unsub2()
+  })
+
+  it('rejects composing child whose state matches group name', () => {
+    // Build a child that has a state named 'g' — then compose under group 'g'
+    const child = stateMachine().state('g').initial('g').action('X').transition('g', 'X', 'g')
+
+    try {
+      stateMachine().state('Root').compose('g', child)
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.cause.type, 'GroupExists')
+    }
   })
 })

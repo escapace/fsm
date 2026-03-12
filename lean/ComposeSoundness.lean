@@ -4,7 +4,6 @@
   Context isolation: child reducers modify only the child context slice.
   Well-formedness: disjoint parent and child state/action sets produce
   a well-formed merged machine.
-  Entry resolution: group-name targets resolve to the child's initial state.
   No-parent-state: the group name is absent from the merged state set.
 -/
 import Compose
@@ -44,7 +43,13 @@ theorem applyReducer_liftTransition_none (lens : CtxLens Compound Child)
     applyReducer (liftTransition lens t) ctx info = ctx := by
   simp only [applyReducer, liftTransition, liftOptReducer, hr, Option.map]
 
-/-! ### Well-formedness of merged state and action lists -/
+/-! ### Well-formedness of merged state and action lists
+
+State sets must be disjoint across parent and all composed children.
+Action sets must be disjoint across composed siblings (parent/child
+overlap is permitted and deduplicated at definition time).
+Both invariants are enforced at definition time, so the disjointness
+preconditions below hold by construction. -/
 
 /-- Appending two nodup lists with disjoint elements produces a nodup list. -/
 theorem nodup_append_of_disjoint
@@ -67,36 +72,6 @@ theorem nodup_append_of_disjoint
       | inl h => exact ha_not_rest h
       | inr h => exact ha_not_l₂ h
     · exact ih hrest_nodup (fun x hx => hdisj x (List.mem_cons_of_mem a hx))
-
-/-! ### Entry resolution -/
-
-/-- Resolving a group-name target to the child's initial state:
-    replacing a target in a transition list produces the expected
-    transition with the child's initial state as target. -/
-def resolveGroupEntry
-    (groupName childInitial : State) [DecidableEq State]
-    (ts : List (TransitionRule State Action Compound Payload))
-    : List (TransitionRule State Action Compound Payload) :=
-  ts.map fun t =>
-    if t.target = groupName then { t with target := childInitial }
-    else t
-
-/-- After resolution, no transition targets the group name
-    (assuming the group name differs from the child initial state). -/
-theorem resolveGroupEntry_no_group_target
-    [DecidableEq State]
-    (groupName childInitial : State)
-    (ts : List (TransitionRule State Action Compound Payload))
-    (hne : groupName ≠ childInitial) :
-    ∀ t ∈ resolveGroupEntry groupName childInitial ts,
-      t.target ≠ groupName := by
-  intro t ht
-  simp only [resolveGroupEntry, List.mem_map] at ht
-  obtain ⟨t', _, rfl⟩ := ht
-  split
-  · simp
-    exact hne.symm
-  · assumption
 
 /-! ### No parent-state -/
 

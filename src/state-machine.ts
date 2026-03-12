@@ -1,15 +1,7 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
 import { szudzik } from 'coastal'
-import {
-  ACTION_EXISTS,
-  ACTION_UNKNOWN,
-  COMPOSE_CHILD_INITIAL_REQUIRED,
-  GROUP_EXISTS,
-  NOT_STATE_MACHINE,
-  STATE_EXISTS,
-  STATE_UNKNOWN,
-} from './error'
+import { StateMachineError } from './error'
 import { product } from './product'
 import {
   STATE_MACHINE_LOG,
@@ -70,7 +62,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
   switch (action.type) {
     case StateMachineBuilderActionType.Action: {
       if (model.state.actions.indexOf(action.payload.action) !== -1) {
-        return ACTION_EXISTS()
+        throw new StateMachineError({ identifier: action.payload.action, type: 'ActionExists' })
       }
 
       model.state.actions.push(action.payload.action)
@@ -84,23 +76,23 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       const childState = child[STATE_MACHINE_STATE]
 
       if (childState === undefined || childState === null || typeof childState !== 'object') {
-        return NOT_STATE_MACHINE()
+        throw new StateMachineError({ type: 'NotStateMachine' })
       }
 
       if (
         model.state.compositions.has(action.payload.group) ||
         model.state.states.indexOf(action.payload.group) !== -1
       ) {
-        return GROUP_EXISTS()
+        throw new StateMachineError({ identifier: action.payload.group, type: 'GroupExists' })
       }
 
       for (const childStateIdentifier of childState.states) {
         if (childStateIdentifier === action.payload.group) {
-          return GROUP_EXISTS()
+          throw new StateMachineError({ identifier: action.payload.group, type: 'GroupExists' })
         }
 
         if (model.state.states.indexOf(childStateIdentifier) !== -1) {
-          return STATE_EXISTS()
+          throw new StateMachineError({ identifier: childStateIdentifier, type: 'StateExists' })
         }
       }
 
@@ -110,17 +102,22 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
         model.state.indiceStates.set(childStateIdentifier, model.state.states.length - 1)
       }
 
-      // Actions merge by identifier. Runtime cannot distinguish payload-type conflicts,
-      // so incompatibilities are handled at type level.
+      // Actions must be disjoint across composed siblings. Parent-declared
+      // actions that overlap a child's actions are deduplicated on merge.
       for (const childActionIdentifier of childState.actions) {
+        for (const [, sibling] of model.state.compositions) {
+          if (sibling[STATE_MACHINE_STATE].actions.indexOf(childActionIdentifier) !== -1) {
+            throw new StateMachineError({
+              identifier: childActionIdentifier,
+              type: 'ActionOverlap',
+            })
+          }
+        }
+
         if (model.state.actions.indexOf(childActionIdentifier) === -1) {
           model.state.actions.push(childActionIdentifier)
           model.state.indiceActions.set(childActionIdentifier, model.state.actions.length - 1)
         }
-      }
-
-      if (childState.initial === undefined) {
-        return COMPOSE_CHILD_INITIAL_REQUIRED()
       }
 
       const group = action.payload.group
@@ -163,16 +160,22 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
 
           const indexAction = model.state.actions.indexOf(lifted.action)
 
+          /* v8 ignore start -- defensive: builder guarantees child actions/states are merged */
           if (indexAction === -1) {
-            return ACTION_UNKNOWN()
+            throw new StateMachineError({ identifier: lifted.action, type: 'ActionUnknown' })
           }
 
           const indexSource = model.state.states.indexOf(lifted.source)
           const indexTarget = model.state.states.indexOf(lifted.target)
 
-          if (indexSource === -1 || indexTarget === -1) {
-            return STATE_UNKNOWN()
+          if (indexSource === -1) {
+            throw new StateMachineError({ identifier: lifted.source, type: 'StateUnknown' })
           }
+
+          if (indexTarget === -1) {
+            throw new StateMachineError({ identifier: lifted.target, type: 'StateUnknown' })
+          }
+          /* v8 ignore stop */
 
           const indexTransition = szudzik(indexSource, indexAction)
           const query = model.state.transitions.get(indexTransition)
@@ -197,7 +200,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
     }
     case StateMachineBuilderActionType.InitialState: {
       if (model.state.states.indexOf(action.payload) === -1) {
-        return STATE_UNKNOWN()
+        throw new StateMachineError({ identifier: action.payload, type: 'StateUnknown' })
       }
 
       model.state.initial = action.payload
@@ -205,7 +208,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
     }
     case StateMachineBuilderActionType.State: {
       if (model.state.states.indexOf(action.payload.state) !== -1) {
-        return STATE_EXISTS()
+        throw new StateMachineError({ identifier: action.payload.state, type: 'StateExists' })
       }
 
       model.state.states.push(action.payload.state)
@@ -213,18 +216,22 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       break
     }
     case StateMachineBuilderActionType.Transition: {
-      const groupMachine = model.state.compositions.get(action.payload.target)
-
-      if (groupMachine !== undefined) {
-        action.payload.target = groupMachine[STATE_MACHINE_STATE].initial!
-      }
-
       const indexAction = model.state.actions.indexOf(action.payload.action)
       const indexSource = model.state.states.indexOf(action.payload.source)
       const indexTarget = model.state.states.indexOf(action.payload.target)
 
-      if (indexSource === -1 || indexTarget === -1 || indexAction === -1) {
-        return STATE_UNKNOWN()
+      /* v8 ignore start -- defensive: transition() builder pre-checks action */
+      if (indexAction === -1) {
+        throw new StateMachineError({ identifier: action.payload.action, type: 'ActionUnknown' })
+      }
+      /* v8 ignore stop */
+
+      if (indexSource === -1) {
+        throw new StateMachineError({ identifier: action.payload.source, type: 'StateUnknown' })
+      }
+
+      if (indexTarget === -1) {
+        throw new StateMachineError({ identifier: action.payload.target, type: 'StateUnknown' })
       }
 
       const indexTransition = szudzik(indexSource, indexAction)
@@ -320,7 +327,7 @@ const transition =
       : { action, predicates: [] }
 
     if (model.state.actions.indexOf(ap.action) === -1) {
-      return ACTION_UNKNOWN()
+      throw new StateMachineError({ identifier: ap.action, type: 'ActionUnknown' })
     }
 
     const next = product(

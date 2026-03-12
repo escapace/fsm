@@ -1,8 +1,14 @@
 import { assert, describe, it, vi } from 'vitest'
-import { STATE_MACHINE_STATE, interpret, stateMachine } from './index'
+import {
+  STATE_MACHINE_STATE,
+  interpret,
+  isStateMachineError,
+  isStateMachineErrorOfType,
+  stateMachine,
+} from './index'
 
 describe('compose', () => {
-  it('resolves group-name targets to child initial and keeps group out of runtime states', () => {
+  it('keeps group names out of runtime states and composes child states', () => {
     const child = stateMachine()
       .state('On')
       .state('Off')
@@ -19,7 +25,7 @@ describe('compose', () => {
       .action('Start')
       .action('Stop')
       .context({ starts: 0 })
-      .transition('Idle', 'Start', 'power', (context) => ({ ...context, starts: 1 }))
+      .transition('Idle', 'Start', 'On', (context) => ({ ...context, starts: 1 }))
       .transition(['On', 'Off'], 'Stop', 'Idle')
 
     const service = interpret(machine)
@@ -62,7 +68,7 @@ describe('compose', () => {
       .initial('Idle')
       .action('Enter')
       .context({ parent: 41 })
-      .transition('Idle', 'Enter', 'child')
+      .transition('Idle', 'Enter', 'ChildA')
 
     const service = interpret(machine)
 
@@ -94,7 +100,7 @@ describe('compose', () => {
       .initial('MiddleIdle')
       .action('EnterLeaf')
       .context({ m: 0 })
-      .transition('MiddleIdle', 'EnterLeaf', 'leaf')
+      .transition('MiddleIdle', 'EnterLeaf', 'LeafA')
 
     const root = stateMachine()
       .state('RootIdle')
@@ -102,7 +108,7 @@ describe('compose', () => {
       .initial('RootIdle')
       .action('EnterMiddle')
       .context({ r: 0 })
-      .transition('RootIdle', 'EnterMiddle', 'middle')
+      .transition('RootIdle', 'EnterMiddle', 'MiddleIdle')
 
     const service = interpret(root)
 
@@ -140,7 +146,7 @@ describe('compose', () => {
     })
   })
 
-  it('rejects composing a child without initial with a precise error', () => {
+  it('allows composing a child without initial when targets are explicit', () => {
     const childWithoutInitial = stateMachine()
       .state('A')
       .initial('A')
@@ -149,9 +155,65 @@ describe('compose', () => {
 
     ;(childWithoutInitial[STATE_MACHINE_STATE] as { initial?: unknown }).initial = undefined
 
-    assert.throws(() => {
-      stateMachine().state('Root').compose('child', childWithoutInitial)
-    }, 'Composed machine must declare an initial state.')
+    const machine = stateMachine()
+      .state('Root')
+      .compose('child', childWithoutInitial)
+      .initial('Root')
+      .action('Enter')
+      .transition('Root', 'Enter', 'A')
+
+    const service = interpret(machine)
+    assert.equal(service.do('Enter'), true)
+    assert.equal(service.state, 'A')
+  })
+
+  it('rejects sibling action overlap across composed children', () => {
+    const childA = stateMachine()
+      .state('A1')
+      .initial('A1')
+      .action('Shared')
+      .transition('A1', 'Shared', 'A1')
+
+    const childB = stateMachine()
+      .state('B1')
+      .initial('B1')
+      .action('Shared')
+      .transition('B1', 'Shared', 'B1')
+
+    try {
+      stateMachine()
+        .state('Root')
+        .compose('a', childA)
+        // @ts-expect-error sibling action overlap
+        .compose('b', childB)
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.cause.type, 'ActionOverlap')
+
+      if (isStateMachineErrorOfType(error, 'ActionOverlap')) {
+        assert.equal(error.cause.identifier, 'Shared')
+      }
+    }
+  })
+
+  it('allows parent-declared action that overlaps child action', () => {
+    const child = stateMachine()
+      .state('C')
+      .initial('C')
+      .action('Shared')
+      .transition('C', 'Shared', 'C')
+
+    const machine = stateMachine()
+      .state('P')
+      .initial('P')
+      .action('Shared')
+      .compose('g', child)
+      .transition('P', 'Shared', 'C')
+
+    const service = interpret(machine)
+    assert.equal(service.do('Shared'), true)
+    assert.equal(service.state, 'C')
   })
 
   it('rejects malformed child machine with not-state-machine error', () => {

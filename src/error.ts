@@ -1,27 +1,75 @@
-export function STATE_EXISTS(): never {
-  throw new Error('State already exists.')
+import type { StateMachineIdentifier } from './types'
+
+export const STATE_MACHINE_ERROR_TYPES = [
+  'ActionExists',
+  'ActionOverlap',
+  'ActionUnknown',
+  'GroupExists',
+  'NotStateMachine',
+  'StateExists',
+  'StateUnknown',
+] as const
+
+export type StateMachineErrorType = (typeof STATE_MACHINE_ERROR_TYPES)[number]
+
+export interface StateMachineErrorMetadata {
+  ActionExists: { identifier: StateMachineIdentifier }
+  ActionOverlap: { identifier: StateMachineIdentifier }
+  ActionUnknown: { identifier: StateMachineIdentifier }
+  GroupExists: { identifier: StateMachineIdentifier }
+  StateExists: { identifier: StateMachineIdentifier }
+  StateUnknown: { identifier: StateMachineIdentifier }
+
+  // eslint-disable-next-line typescript/no-empty-object-type
+  NotStateMachine: {}
 }
 
-export function STATE_UNKNOWN(): never {
-  throw new Error('No such state.')
+export type StateMachineErrorCause<T extends StateMachineErrorType = StateMachineErrorType> =
+  T extends StateMachineErrorType ? { type: T } & StateMachineErrorMetadata[T] : never
+
+function formatIdentifier(id: StateMachineIdentifier): string {
+  return typeof id === 'symbol' ? String(id) : JSON.stringify(id)
 }
 
-export function ACTION_EXISTS(): never {
-  throw new Error('Action already exists.')
+function formatMessage(cause: StateMachineErrorCause): string {
+  switch (cause.type) {
+    case 'ActionExists':
+      return `Action ${formatIdentifier(cause.identifier)} already exists.`
+    case 'ActionOverlap':
+      return `Action ${formatIdentifier(cause.identifier)} overlaps a previously composed child action.`
+    case 'ActionUnknown':
+      return `No such action ${formatIdentifier(cause.identifier)}.`
+    case 'GroupExists':
+      return `Group ${formatIdentifier(cause.identifier)} already exists or conflicts with a declared state.`
+    case 'NotStateMachine':
+      return 'Parameter is not a state machine.'
+    case 'StateExists':
+      return `State ${formatIdentifier(cause.identifier)} already exists.`
+    case 'StateUnknown':
+      return `No such state ${formatIdentifier(cause.identifier)}.`
+  }
 }
 
-export function ACTION_UNKNOWN(): never {
-  throw new Error('No such action.')
+export class StateMachineError<
+  T extends StateMachineErrorType = StateMachineErrorType,
+> extends Error {
+  readonly cause: StateMachineErrorCause<T>
+  readonly name = 'StateMachineError' as const
+
+  constructor(cause: StateMachineErrorCause<T>) {
+    super(formatMessage(cause))
+    this.cause = cause
+    Object.setPrototypeOf(this, StateMachineError.prototype)
+  }
 }
 
-export function GROUP_EXISTS(): never {
-  throw new Error('Group already exists or conflicts with a declared state.')
+export function isStateMachineError(value: unknown): value is StateMachineError {
+  return value instanceof StateMachineError
 }
 
-export function COMPOSE_CHILD_INITIAL_REQUIRED(): never {
-  throw new Error('Composed machine must declare an initial state.')
-}
-
-export function NOT_STATE_MACHINE(): never {
-  throw new Error('Parameter is not a state machine.')
+export function isStateMachineErrorOfType<T extends StateMachineErrorType>(
+  error: StateMachineError,
+  type: T,
+): error is StateMachineError<T> {
+  return error.cause.type === type
 }
