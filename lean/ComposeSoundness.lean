@@ -53,7 +53,7 @@ preconditions below hold by construction. -/
 
 /-- Appending two nodup lists with disjoint elements produces a nodup list. -/
 theorem nodup_append_of_disjoint
-    {α : Type}
+    {α : Type _}
     {l₁ l₂ : List α}
     (h₁ : l₁.Nodup) (h₂ : l₂.Nodup)
     (hdisj : ∀ x, x ∈ l₁ → x ∉ l₂) :
@@ -151,8 +151,49 @@ theorem merged_states_eq
     (parentStates childStates : List State) :
     parentStates ++ childStates = parentStates ++ childStates := rfl
 
-/-- The merged action set is the concatenation of parent and child actions.
-    True by construction of the merge operation. -/
+/-- The merged action set for disjoint siblings is the concatenation
+    of parent and child actions. True by construction. -/
 theorem merged_actions_eq
     (parentActions childActions : List Action) :
     parentActions ++ childActions = parentActions ++ childActions := rfl
+
+/-! ### Deduplicated action merge (parent/child overlap)
+
+When a parent-declared action overlaps a child action, the runtime
+skips the child's duplicate (dedup). The merged list is
+`parent ++ filter (∉ parent) child`. The following theorems prove
+this preserves nodup and retains all actions from both sets. -/
+
+/-- Filtering a nodup list preserves nodup. -/
+theorem nodup_filter_of_nodup {α : Type _}
+    {l : List α} (h : l.Nodup) (p : α → Bool) :
+    (l.filter p).Nodup :=
+  h.sublist (List.filter_sublist)
+
+/-- Appending a parent list with a filtered child list preserves nodup
+    when the parent list is nodup and the child list is nodup. -/
+theorem nodup_dedup_merge {α : Type _} [DecidableEq α]
+    (parent child : List α)
+    (hp : parent.Nodup) (hc : child.Nodup) :
+    (parent ++ child.filter (fun x => decide (x ∉ parent))).Nodup := by
+  apply nodup_append_of_disjoint hp (nodup_filter_of_nodup hc _)
+  intro x hx
+  simp only [List.mem_filter, decide_eq_true_eq]
+  intro ⟨_, hmem⟩
+  exact hmem hx
+
+/-- Every parent action is in the dedup-merged list. -/
+theorem mem_dedup_merge_of_mem_parent {α : Type _} [DecidableEq α]
+    (parent child : List α) {a : α} (h : a ∈ parent) :
+    a ∈ parent ++ child.filter (fun x => decide (x ∉ parent)) := by
+  exact List.mem_append_left _ h
+
+/-- Every child action is in the dedup-merged list. -/
+theorem mem_dedup_merge_of_mem_child {α : Type _} [DecidableEq α]
+    (parent child : List α) {a : α} (h : a ∈ child) :
+    a ∈ parent ++ child.filter (fun x => decide (x ∉ parent)) := by
+  by_cases hm : a ∈ parent
+  · exact List.mem_append_left _ hm
+  · apply List.mem_append_right
+    simp only [List.mem_filter, decide_eq_true_eq]
+    exact ⟨h, hm⟩

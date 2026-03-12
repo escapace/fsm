@@ -260,7 +260,7 @@ A lifted child reducer updates only the child context slice. Projecting the comp
 
 ### P10 — Merge well-formedness
 
-If parent and child state sets are individually unique (nodup) and mutually disjoint, the merged state set is unique. Action sets must be disjoint across composed siblings; parent/child action overlap with compatible payloads is deduplicated so the merged action set remains unique. If all child transitions reference states in the child state set, all lifted child transitions reference states in the merged state set.
+If parent and child state sets are individually unique (nodup) and mutually disjoint, the merged state set is unique. Action sets must be disjoint across composed siblings; parent/child action overlap with compatible payloads is deduplicated (`parent ++ filter (∉ parent) child`) and the merged action set remains unique. Both the disjoint merge and the dedup merge preserve nodup, and every action from both inputs is present in the merged result. If all child transitions reference states in the child state set, all lifted child transitions reference states in the merged state set.
 
 ### P11 — Group-name exclusion
 
@@ -390,7 +390,7 @@ The Lean proof files in `lean/` (leanprover/lean4:v4.27.0) encode and verify the
 | `Validity.lean`             | unknown_action_rejected, dispatch_unknownAction_iff                                                                                                      | P5           |
 | `Expansion.lean`            | Candidate-list correctness for Cartesian expansion under `sources.Nodup`                                                                                 | P6           |
 | `Compose.lean`              | CtxLens, liftGuard, liftReducer, liftTransition, mergeTransitions; guard/candidate/selectCandidate commutativity with lifting                            | P9, P12      |
-| `ComposeSoundness.lean`     | Context isolation (child slice + other slices), merge well-formedness (nodup, transition wf), group-name exclusion                                       | P9, P10, P11 |
+| `ComposeSoundness.lean`     | Context isolation (child slice + other slices), merge well-formedness (nodup, transition wf, dedup merge), group-name exclusion                          | P9, P10, P11 |
 | `ComposeAssociativity.lean` | composeLens, lifting/merging associativity                                                                                                               | P13          |
 
 ### Proof invariants
