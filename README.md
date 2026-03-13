@@ -1,6 +1,6 @@
 # @escapace/fsm
 
-Flat extended finite state machines for event-driven application logic in TypeScript. A typed builder API keeps states, actions, and payloads explicit, with payload types flowing through dispatch, guards, reducers, and subscriptions. Builder composition (`.compose(...)`) flattens child machines into the same runtime model (no runtime hierarchy).
+Flat extended finite state machines for event-driven application logic in TypeScript, with builder composition. A typed builder API keeps states, actions, and payloads explicit, with payload types flowing through dispatch, guards, reducers, and subscriptions. Optimistic drafts provide isolated speculative execution with explicit commit/discard.
 
 ## Installation
 
@@ -73,7 +73,12 @@ The repository treats these behaviors as the user-facing semantic contract:
 - guards are evaluated in order and stop at the first failure,
 - the first transition whose guards all pass is selected,
 - reducers run only after a transition has been selected,
-- subscribers are notified only after successful transitions,
+- subscribers are notified only after successful live transitions,
+- `service.draft()` captures an isolated snapshot of state and context,
+- `draft.do(...)` uses the same action validation, candidate selection, guard evaluation, and reducer semantics as service dispatch,
+- successful draft execution remains private until commit,
+- root draft commit replays successful draft steps onto the live service in order and notifies subscribers per replayed step,
+- child draft commit updates the parent draft only and does not notify subscribers,
 - source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets,
 - `.compose(group, child)` merges child states/actions/transitions into the same flat machine,
 - states must be disjoint across parent and all children; actions must be disjoint across composed siblings,
@@ -86,6 +91,7 @@ The repository treats these behaviors as the user-facing semantic contract:
 - `state` — current state
 - `context` — current context
 - `do(action, payload?)` — dispatches an action
+- `draft()` — creates an isolated draft handle
 - `subscribe(callback)` — observes successful transitions
 
 ### `do(action, payload?)`
@@ -117,6 +123,45 @@ service.do('stop') // false
 console.log(service.state) // 'working'
 ```
 
+## Drafts
+
+`service.draft()` creates an isolated draft handle from the current live snapshot. `draft.do(...)` applies the same dispatch semantics as `service.do(...)`, but keeps state and context changes private until commit.
+
+```typescript
+const machine = stateMachine()
+  .state('idle')
+  .state('working')
+  .state('done')
+  .initial('idle')
+  .action('start')
+  .action('finish')
+  .context(() => ({ steps: 0 }))
+  .transition('idle', 'start', 'working', (context) => ({ steps: context.steps + 1 }))
+  .transition('working', 'finish', 'done', (context) => ({ steps: context.steps + 1 }))
+
+const service = interpret(machine)
+const draft = service.draft()
+
+draft.do('start')
+console.log(service.state) // 'idle'
+console.log(draft.state) // 'working'
+
+draft.commit()
+console.log(service.state) // 'working'
+console.log(service.context) // { steps: 1 }
+```
+
+Draft behavior:
+
+- `draft.do(action, payload?)` returns `true` on a selected transition, returns `false` on the same two failure cases as service dispatch, and throws for undeclared actions,
+- `draft.discard()` closes the handle and drops speculative work,
+- `draft.draft()` creates a nested draft from the current draft snapshot,
+- child `commit()` merges into the parent draft only; root `commit()` replays successful draft steps onto the live service in order,
+- subscribers are notified only for successful live transitions and root draft replay,
+- `commit()` throws `DraftOutOfDate` when the parent has advanced since draft creation,
+- after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`,
+- draft creation clones context with `structuredClone`; cloning failures throw `DraftContextCloneFailed`.
+
 ## Known limits and non-goals
 
 These points are worth knowing up front:
@@ -125,6 +170,10 @@ These points are worth knowing up front:
 - the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
 - reducers may either mutate the existing context object or return a new one,
 - subscription callbacks are best treated as immediate notifications rather than durable event records; code that needs retained history should copy the received values,
+- drafts require context values that `structuredClone` can clone at draft-creation time,
+- drafts do not expose `subscribe(...)`; the publication boundary is commit,
+- conflict detection is optimistic: stale commits are rejected with `DraftOutOfDate` rather than merged,
+- draft traces are internal commit machinery, not a public history API,
 - composed machines are still flat at runtime; `.compose(...)` is authoring-time structure, not runtime hierarchy,
 - group names are not states and cannot be transition targets,
 - the library models flat state machines only; it does not provide hierarchy, parallel regions, history states, or other statechart semantics.
@@ -156,7 +205,24 @@ Creates an executable machine service.
 #### Methods
 
 - `.do(action, payload?)` — dispatch an action
+- `.draft()` — create an isolated draft handle
 - `.subscribe(callback)` — subscribe to successful transitions
+
+### `StateMachineDraft`
+
+Represents an isolated speculative execution handle.
+
+#### Properties
+
+- `.state` — current draft state
+- `.context` — current draft context
+
+#### Methods
+
+- `.do(action, payload?)` — dispatch an action against the draft snapshot
+- `.draft()` — create a nested draft
+- `.commit()` — publish changes to the parent draft or live service
+- `.discard()` — close the draft without publishing changes
 
 ## Performance
 
