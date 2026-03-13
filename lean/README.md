@@ -6,16 +6,19 @@ This document defines the semantics of the flat extended finite state machine (E
 
 ## Scope
 
-This specification covers the **semantic model** — the observable behavior of machine definition, composition, and dispatch. It deliberately excludes:
+This specification covers the **semantic model** — the observable behavior of machine definition, composition, dispatch, and draft-based speculative execution. It deliberately excludes:
 
 - paired-key (Szudzik) indexing used for transition lookup at runtime,
 - mutable builder internals and builder action log,
 - pre-allocated object reuse in the interpreter,
 - TypeScript type-level encoding and staged builder types,
 - subscription object identity and allocation strategy,
-- `Symbol`-keyed internal properties.
+- `Symbol`-keyed internal properties,
+- context cloning algorithms and object identity preservation (§4.15).
 
 These are implementation details. The proofs target the semantic layer only.
+
+Drafts (§4) are an additive operational layer over the same flat EFSM semantics. They do not change the semantic class of the machine.
 
 ## 1 — Definitions
 
@@ -36,7 +39,7 @@ where:
 - `S` is a finite, non-empty, ordered set of **state identifiers**. Order is declaration order.
 - `A` is a finite, non-empty, ordered set of **action identifiers**. Order is declaration order.
 - `C₀` is the **initial context**, either a value or a nullary factory function. When `C₀` is a function, it is called exactly once per interpretation to produce the initial context value.
-- `s₀ ∈ S` is the **initial state**. Required for standalone interpretation; may be absent in a child machine used only through composition (§9.1).
+- `s₀ ∈ S` is the **initial state**. Required for standalone interpretation; may be absent in a child machine used only through composition (§11.1).
 - `T` is a finite, ordered list of **transition rules** (see §1.3).
 
 Uniqueness constraints enforced at definition time:
@@ -179,17 +182,226 @@ The change record passed to each subscriber contains:
 
 The change record object is shared and reused across dispatch calls. Subscribers that need to retain the change record must copy it before the subscription function returns. This is an implementation-level characteristic documented here for completeness; the semantic model treats each notification as delivering the values described in §3.5.
 
-## 4 — Context initialization
+## 4 — Draft semantics
 
-### 4.1 — Value initialization
+Drafts are an additive operational layer over the flat EFSM dispatch and subscription semantics defined in §1–§3. They provide provisional speculative execution with explicit commit or discard. A draft does not change the semantic class of the machine; it reuses the same dispatch rules, candidate selection, and transition execution defined in §2.
+
+### 4.1 — Service cursor
+
+A machine instance (§1.6) maintains an internal monotonic cursor `serviceCursor : Nat`, starting at `0` and incremented by one after every successful transition visible on the live service.
+
+### 4.2 — Selected step
+
+A **selected step** records a successful dispatch:
+
+```
+SelectedStep = { transition, action }
+```
+
+- `transition` — the selected transition rule (§1.3).
+- `action` — the action information record `{ type, payload, source, target }` (§2.3).
+
+### 4.3 — Selected-step application
+
+```
+applySelected(snapshot, step) → snapshot'
+```
+
+Sets `state := step.transition.target` and applies `step.transition.reducer` to the context if present, delegating to `applyReducer` (§2.5). No candidate lookup or guard evaluation.
+
+### 4.4 — Trace replay
+
+```
+replayTrace(snapshot, trace) → snapshot'
+```
+
+Left fold of `applySelected` over `trace`:
+
+```
+replayTrace(snap, [])           = snap
+replayTrace(snap, step :: rest) = replayTrace(applySelected(snap, step), rest)
+```
+
+### 4.5 — Draft handle
+
+A **draft handle** stores three fields:
+
+```
+Draft = { baseCursor, baseSnapshot, trace }
+```
+
+- `baseCursor : Nat` — the parent cursor captured at draft creation.
+- `baseSnapshot = { state, context }` — the parent snapshot captured at draft creation.
+- `trace` — an append-only list of selected steps (§4.2).
+
+Two values are derived, not stored:
+
+```
+currentSnapshot = replayTrace(baseSnapshot, trace)
+draftHeadCursor = baseCursor + length(trace)
+```
+
+The runtime additionally tracks a `closed : Bool` flag and a parent reference for lifecycle management; those are outside the semantic model (§10).
+
+### 4.6 — Service `draft()`
+
+`service.draft()` creates a draft handle with:
+
+- `baseCursor = serviceCursor`,
+- `baseSnapshot = { state = service.state, context = clone(service.context) }`,
+- `trace = []`.
+
+This operation does not mutate the service and does not notify subscribers.
+
+### 4.7 — Draft `do(action, payload?)`
+
+`draft.do(...)` applies the ordinary dispatch semantics (§2) against `currentSnapshot`:
+
+- If `action ∉ A`: throw the same unknown-action error as the service (§2.1).
+- If dispatch would return `false` (no candidates, or all guards fail): return `false`. Leave `trace` and `currentSnapshot` unchanged.
+- If dispatch succeeds with selected transition `t`, action record `a`, and post-snapshot `snap'`:
+  - append `{ transition = t, action = a }` to `trace`,
+  - set `currentSnapshot := snap'`,
+  - return `true`.
+
+Draft `do(...)` does not notify subscribers.
+
+### 4.8 — Nested `draft()`
+
+`draft.draft()` on an open draft creates a child draft handle with:
+
+- `baseCursor = draftHeadCursor` (of the parent draft),
+- `baseSnapshot = clone(parent.currentSnapshot)`,
+- `trace = []`.
+
+This operation does not mutate the parent draft.
+
+### 4.9 — `discard()`
+
+`draft.discard()`:
+
+- Marks the handle as closed (`closed = true`).
+- Does not mutate the parent.
+- Does not notify subscribers.
+
+After discard, all mutating methods on the handle fail with `DraftClosed`.
+
+### 4.10 — `commit()` into a parent draft
+
+For a child draft whose parent is another draft:
+
+1. If this handle is closed, fail with `DraftClosed`.
+2. If any ancestor draft is closed, fail with `DraftClosed`.
+3. Let `parentHead = parent.baseCursor + length(parent.trace)`.
+4. If `parentHead ≠ this.baseCursor`, fail with `DraftOutOfDate`.
+5. If `trace` is empty, close this draft and return success without mutating the parent.
+6. Otherwise:
+   - append `this.trace` to `parent.trace`,
+   - set `parent.currentSnapshot := this.currentSnapshot`,
+   - close this draft,
+   - return success.
+
+No subscriptions fire, because drafts do not expose subscriptions (§4.13).
+
+### 4.11 — `commit()` into the service
+
+For a root draft whose parent is the live service:
+
+1. If this handle is closed, fail with `DraftClosed`.
+2. If `serviceCursor ≠ this.baseCursor`, fail with `DraftOutOfDate`.
+3. If `trace` is empty, close this draft and return success without mutating the service.
+4. Otherwise, replay each selected step in `trace` onto the service in order:
+   - apply the selected step directly to the service snapshot,
+   - increment `serviceCursor` by one,
+   - notify subscribers with the ordinary post-transition change record (§3.5).
+5. After replay completes, the service snapshot equals `this.currentSnapshot`.
+6. Close the draft and return success.
+
+This is the only draft operation that emits subscription notifications.
+
+### 4.12 — Conflict semantics
+
+#### Cursor equality
+
+Conflict detection uses cursor equality, not snapshot equality. Snapshot equality is insufficient because different histories can reach the same snapshot, and the runtime does not define general equality for arbitrary context values.
+
+#### Root conflicts
+
+A root draft is stale if the live service has advanced since draft creation:
+
+```
+serviceCursor ≠ draft.baseCursor
+```
+
+Advancement includes successful `service.do(...)` or successful commit from another root draft.
+
+#### Nested conflicts
+
+A child draft is stale if its parent draft's head cursor has advanced since child creation:
+
+```
+parent.draftHeadCursor ≠ child.baseCursor
+```
+
+Advancement includes parent draft `do(...)` or commit from a sibling child draft.
+
+#### Multiple drafts
+
+Multiple drafts are allowed. Conflict resolution is optimistic: the first successful commit wins; later commits against an advanced parent fail with `DraftOutOfDate`.
+
+### 4.13 — Subscription policy
+
+Drafts do not expose `subscribe(...)`.
+
+Draft execution is private. The publication boundary is commit. Parent subscribers observe only committed transitions.
+
+#### Root commit replay
+
+During root commit (§4.11), subscriber callbacks on the live service are invoked exactly as if the replayed transitions had been executed on the live service in order:
+
+- One callback per replayed successful transition.
+- Subscribers invoked in registration order (§3.4).
+- Post-transition state and context in each callback (§3.5).
+- Action equal to the recorded selected step action.
+
+#### Child commit
+
+Child commit into a parent draft (§4.10) produces no subscription effects because drafts have no subscriptions.
+
+### 4.14 — Closure semantics
+
+#### Terminal closure
+
+`commit()` and `discard()` are terminal. After either call succeeds:
+
+- `do(...)` fails with `DraftClosed`.
+- `draft()` fails with `DraftClosed`.
+- `commit()` fails with `DraftClosed`.
+- `discard()` fails with `DraftClosed`.
+
+#### Ancestor closure
+
+If any ancestor draft is closed, descendant draft mutating operations fail with `DraftClosed`.
+
+#### Read-only access after closure
+
+The specification does not require `state` and `context` getters to throw after closure. The implementation may leave them readable as last-known snapshots. No mutating behavior is permitted after closure.
+
+### 4.15 — Context treatment
+
+The semantic model treats context as a value. Context cloning at draft creation, materialization strategy on commit, and the choice of runtime cloning mechanism are implementation concerns outside the semantic model. The Lean formalization reasons about resulting context values, not about object identity or cloning algorithms.
+
+## 5 — Context initialization
+
+### 5.1 — Value initialization
 
 If `C₀` is not a function, the initial context of each machine instance is `C₀` directly. Multiple instances share the same reference.
 
-### 4.2 — Factory initialization
+### 5.2 — Factory initialization
 
 If `C₀` is a function (nullary), the initial context of each machine instance is the return value of `C₀()`. The factory is called exactly once per `interpret(M)` call, producing an independent context for each instance.
 
-## 5 — Definition-time errors
+## 6 — Definition-time errors
 
 These errors are raised during machine construction (builder calls), not during dispatch:
 
@@ -206,7 +418,7 @@ These errors are raised during machine construction (builder calls), not during 
 | Composing with a child whose action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
 | Composing with a value that is not a machine definition                             | "Parameter is not a state machine."                        |
 
-## 6 — Dispatch-time errors
+## 7 — Dispatch-time errors
 
 | Condition                   | Behavior                            |
 | --------------------------- | ----------------------------------- |
@@ -215,7 +427,19 @@ These errors are raised during machine construction (builder calls), not during 
 | All candidate guards fail   | Returns `false`                     |
 | A candidate is selected     | Executes transition, returns `true` |
 
-## 7 — Properties for Lean verification
+## 8 — Draft-time errors
+
+| Condition                                         | Behavior                         |
+| ------------------------------------------------- | -------------------------------- |
+| `do(...)` on a closed draft                       | Throws `DraftClosed`             |
+| `do(...)` on a draft with a closed ancestor       | Throws `DraftClosed`             |
+| `draft()` on a closed draft                       | Throws `DraftClosed`             |
+| `commit()` on a closed draft                      | Throws `DraftClosed`             |
+| `discard()` on a closed draft                     | Throws `DraftClosed`             |
+| `commit()` when parent cursor ≠ `baseCursor`      | Throws `DraftOutOfDate`          |
+| `draft()` when `structuredClone` fails on context | Throws `DraftContextCloneFailed` |
+
+## 9 — Properties for Lean verification
 
 The following properties are derived from the semantics above and form the target theorem set.
 
@@ -274,7 +498,39 @@ Candidate selection on lifted transitions with compound context produces the sam
 
 Lifting through a composed lens (outer ∘ inner) equals lifting twice (inner then outer). Merging parent with an already-merged child produces the same transition list as merging all three levels at once. Nested composition is therefore associative.
 
-## 8 — Out of scope for the current proof work
+### P14 — Selected-step replay equivalence
+
+If ordinary dispatch succeeds with selected transition `t`, action record `a`, and post-snapshot `snap'`, then `applySelected(preSnap, { transition = t, action = a }) = snap'`. That is, applying a selected step to the pre-dispatch snapshot produces the same result as the dispatch itself (excluding subscriber notification).
+
+### P15 — Draft trace invariant
+
+For every open draft handle, `currentSnapshot = replayTrace(baseSnapshot, trace)`. This holds after draft creation (empty trace) and is preserved by every successful `draft.do(...)`.
+
+### P16 — Root commit replay soundness
+
+If a root draft is open and the parent service cursor still equals `baseCursor`, then commit produces a live service snapshot equal to the draft's `currentSnapshot`.
+
+The Lean theorem additionally requires `svc.snapshot = d.baseSnapshot` as an explicit hypothesis, because the semantic model does not formalize the runtime lifecycle invariant that cursor equality implies snapshot equality (see §10).
+
+The specification also states that commit "emits the same ordered change sequence as replaying the trace step by step." The subscription notification ordering aspect of this claim is outside the scope of the current Lean formalization (see §10). The snapshot equality result is the core semantic content; the notification ordering follows from the runtime implementation structure.
+
+### P17 — Child commit append soundness
+
+If a child draft commits against an unchanged open parent draft, then the parent draft trace becomes `oldParentTrace ++ childTrace`, and the parent draft snapshot becomes the child draft snapshot. The Lean formalization proves both claims via a unified `commitChildDraft` operation that combines cursor gate and trace merge, parallel to the root `commitRootDraft`.
+
+### P18 — Stale commit rejection
+
+If parent cursor differs from `baseCursor`, commit rejects with `DraftOutOfDate` and leaves the parent unchanged. This is proved for both root drafts (`commitRootDraft`) and nested drafts (`commitChildDraft`).
+
+### P19 — Draft failure preservation
+
+Draft `do(...)` preserves the same failure cases as ordinary dispatch: unknown action throws, no candidate returns `false`, all guards failing returns `false`. The Lean formalization proves failure characterization and unknown-action rejection by direct delegation to the existing dispatch theorems (P3, P5). The claim that "unsuccessful calls do not extend the trace" is an operational property of the runtime dispatch path — in the pure semantic model, `appendStep` is called only after successful dispatch, so non-extension is structural rather than a separate theorem.
+
+### P20 — Ancestor closure safety
+
+If any ancestor draft in a chain is closed, the chain is not all-open and the draft is not operational. The Lean formalization proves this as a pure predicate over ancestor closed-flag lists (`ancestorsAllOpen`). The specific runtime error type (`DraftClosed`) and integration with draft operation signatures are runtime-level concerns outside the semantic model (see §10).
+
+## 10 — Out of scope for the current proof work
 
 The following are explicitly excluded from Lean formalization:
 
@@ -285,12 +541,18 @@ The following are explicitly excluded from Lean formalization:
 - TypeScript type-level inference and staged builder typing.
 - Performance characteristics (latency, allocation counts).
 - Concurrent or re-entrant dispatch (the model assumes sequential dispatch).
+- Context cloning algorithms and object identity preservation on draft creation and commit.
+- Runtime materialization strategy for parent-context updates on commit.
+- Subscription notification ordering during root draft commit replay (P16). The snapshot equality result is proved; the notification sequence follows from the runtime implementation.
+- Runtime lifecycle invariant connecting cursor equality to snapshot equality (P16). The Lean model takes `svc.snapshot = d.baseSnapshot` as an explicit hypothesis; the runtime guarantees this because every state change increments the cursor.
+- Trace non-extension on dispatch failure (P19). In the pure model, `appendStep` is called only after successful dispatch, making non-extension structural rather than a theorem.
+- Draft error-type semantics: `DraftClosed` and `DraftOutOfDate` as specific error constructors (P18, P20). The Lean model uses `outOfDate` result constructors and a chain predicate; the mapping to runtime error types is straightforward.
 
-## 9 — Composition semantics
+## 11 — Composition semantics
 
 Composition is an authoring-time operation that merges a child machine into a parent machine. The result is a flat machine definition conforming to the same model described in §1–§2. No runtime hierarchy exists after composition.
 
-### 9.1 — Composition operation
+### 11.1 — Composition operation
 
 Given a parent machine `P` and a child machine `M_child`:
 
@@ -306,7 +568,7 @@ where `group` is an identifier that:
 
 The child machine `M_child` must have declared states and actions but does **not** require an initial state (`s₀`). An initial state is required only for standalone interpretation via `interpret(M)`.
 
-### 9.2 — Group names
+### 11.2 — Group names
 
 Group names are **context keys only**. A group name:
 
@@ -316,14 +578,14 @@ Group names are **context keys only**. A group name:
 
 Transitions must target explicit child states, not group names.
 
-### 9.3 — State and action merging
+### 11.3 — State and action merging
 
 The composed machine merges parent and child identifiers:
 
 - `S_composed = S_parent ∪ S_child` — state sets are concatenated. States must be disjoint across parent and all children.
 - `A_composed = A_parent ∪ A_child` — action sets are concatenated. Actions must be disjoint across composed siblings. Parent-declared actions that overlap a child's actions are deduplicated on merge, provided their payload types are compatible; incompatible payload overlap is rejected at the type level.
 
-### 9.4 — Transition merging
+### 11.4 — Transition merging
 
 Child transitions are lifted to operate on the compound context and appended after parent transitions:
 
@@ -331,11 +593,11 @@ Child transitions are lifted to operate on the compound context and appended aft
 T_composed = T_parent ++ lift(lens, T_child)
 ```
 
-where `lift(lens, t)` preserves the source, action, and target of each child transition rule while lifting guards and reducers through a context lens (§9.5).
+where `lift(lens, t)` preserves the source, action, and target of each child transition rule while lifting guards and reducers through a context lens (§11.5).
 
 The merged transition list follows the same ordered-candidate semantics defined in §1.5 and §2.3. Parent transitions appear before child transitions in candidate order.
 
-### 9.5 — Context lens
+### 11.5 — Context lens
 
 A **context lens** is a pair of functions `(get, set)` satisfying the standard lens laws:
 
@@ -347,7 +609,7 @@ The lens projects the child context slice from the compound context. Guards and 
 - **Guard lifting**: `liftGuard(lens, g) = (ctx, info) → g(lens.get(ctx), info)`.
 - **Reducer lifting**: `liftReducer(lens, r) = (ctx, info) → lens.set(ctx, r(lens.get(ctx), info))`.
 
-### 9.6 — Compound context
+### 11.6 — Compound context
 
 The compound context is constructed from the parent's own context and each child's context, keyed by group name:
 
@@ -359,7 +621,7 @@ When the parent context is a factory function, the compound context factory call
 
 Build order does not affect the resulting compound context: `context(...).compose(...)` and `compose(...).context(...)` produce equivalent definitions.
 
-### 9.7 — Composition diagnostics
+### 11.7 — Composition diagnostics
 
 | Condition                                                    | Error                                                      |
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
@@ -368,30 +630,35 @@ Build order does not affect the resulting compound context: `context(...).compos
 | Child state overlaps parent or sibling state                 | "State already exists."                                    |
 | Child action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
 
-### 9.8 — Nested composition
+### 11.8 — Nested composition
 
 Composition may be applied recursively: a child machine may itself be a composed machine. The resulting flattened machine is equivalent regardless of nesting depth, because transition lifting through composed lenses is associative (P13).
 
-### 9.9 — Post-composition semantics
+### 11.9 — Post-composition semantics
 
 After composition, the resulting flat machine follows the dispatch semantics of §2 without modification. There is no runtime awareness of composition boundaries, parent–child relationships, or group names beyond the context structure.
 
-## 10 — Lean proof files
+## 12 — Lean proof files
 
-The Lean proof files in `lean/` (leanprover/lean4:v4.27.0) encode and verify the semantic properties listed in §7.
+The Lean proof files in `lean/` (leanprover/lean4:v4.27.0) encode and verify the semantic properties listed in §9.
 
-| File                        | Content                                                                                                                                                  | Properties   |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `Defs.lean`                 | Core types: ActionInfo, TransitionRule, Machine, DispatchResult                                                                                          | —            |
-| `Dispatch.lean`             | Functions (mkActionInfo, allGuardsPass, selectCandidate, candidates, dispatch) + helper lemmas                                                           | —            |
-| `Determinism.lean`          | dispatch_deterministic, selectCandidate_deterministic                                                                                                    | P1           |
-| `Soundness.lean`            | Success soundness (candidate membership, guard success, source/action/target agreement, ordered-selection minimality); dispatch_failure_characterization | P2, P3       |
-| `Reachability.lean`         | reachable_mem_states, dispatch_success_target_mem_states                                                                                                 | P4           |
-| `Validity.lean`             | unknown_action_rejected, dispatch_unknownAction_iff                                                                                                      | P5           |
-| `Expansion.lean`            | Candidate-list correctness for Cartesian expansion under `sources.Nodup`                                                                                 | P6           |
-| `Compose.lean`              | CtxLens, liftGuard, liftReducer, liftTransition, mergeTransitions; guard/candidate/selectCandidate commutativity with lifting                            | P9, P12      |
-| `ComposeSoundness.lean`     | Context isolation (child slice + other slices), merge well-formedness (nodup, transition wf, dedup merge), group-name exclusion                          | P9, P10, P11 |
-| `ComposeAssociativity.lean` | composeLens, lifting/merging associativity                                                                                                               | P13          |
+| File                        | Content                                                                                                                                                  | Properties    |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `Defs.lean`                 | Core types: ActionInfo, TransitionRule, Machine, DispatchResult                                                                                          | —             |
+| `Dispatch.lean`             | Functions (mkActionInfo, allGuardsPass, selectCandidate, candidates, dispatch) + helper lemmas                                                           | —             |
+| `Determinism.lean`          | dispatch_deterministic, selectCandidate_deterministic                                                                                                    | P1            |
+| `Soundness.lean`            | Success soundness (candidate membership, guard success, source/action/target agreement, ordered-selection minimality); dispatch_failure_characterization | P2, P3        |
+| `Reachability.lean`         | reachable_mem_states, dispatch_success_target_mem_states                                                                                                 | P4            |
+| `Validity.lean`             | unknown_action_rejected, dispatch_unknownAction_iff                                                                                                      | P5            |
+| `Expansion.lean`            | Candidate-list correctness for Cartesian expansion under `sources.Nodup`                                                                                 | P6            |
+| `Compose.lean`              | CtxLens, liftGuard, liftReducer, liftTransition, mergeTransitions; guard/candidate/selectCandidate commutativity with lifting                            | P9, P12       |
+| `ComposeSoundness.lean`     | Context isolation (child slice + other slices), merge well-formedness (nodup, transition wf, dedup merge), group-name exclusion                          | P9, P10, P11  |
+| `ComposeAssociativity.lean` | composeLens, lifting/merging associativity                                                                                                               | P13           |
+| `Replay.lean`               | Snapshot, SelectedStep, applySelected, replayTrace, replayTrace_append; selected-step replay equivalence                                                 | P14           |
+| `DraftDefs.lean`            | ServiceState, DraftHandle, currentSnapshot, headCursor, mkRootDraft, appendStep, commitRootDraft                                                         | —             |
+| `Draft.lean`                | Draft trace invariant, draft failure preservation, stale commit rejection (root)                                                                         | P15, P18, P19 |
+| `DraftCommit.lean`          | Root commit replay soundness (snapshot equality), empty-trace commit, fresh-draft commit                                                                 | P16           |
+| `DraftNested.lean`          | mkChildDraft, mergeChildTrace, commitChildDraft; child commit append soundness, stale child rejection, ancestor closure safety                           | P17, P18, P20 |
 
 ### Proof invariants
 

@@ -5,7 +5,7 @@ import {
   isStateMachineError,
   isStateMachineErrorOfType,
   stateMachine,
-} from './index'
+} from '../index'
 
 describe('compose', () => {
   it('keeps group names out of runtime states and composes child states', () => {

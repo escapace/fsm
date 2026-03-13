@@ -5,7 +5,7 @@ import {
   isStateMachineErrorOfType,
   StateMachineError,
   stateMachine,
-} from './index'
+} from '../index'
 
 describe('Lean tranche alignment (P1–P6)', () => {
   it('P1: dispatch is deterministic for identical machine and action sequence', () => {

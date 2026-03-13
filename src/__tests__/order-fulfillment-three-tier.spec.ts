@@ -1,11 +1,11 @@
 import { assert, describe, it } from 'vitest'
-import { interpret, stateMachine, type InferStateMachineModel } from './index'
+import { interpret, stateMachine, type InferStateMachineModel } from '../index'
 import type {
   StateMachineActionPayload,
   StateMachineActions,
   StateMachineGroups,
   StateMachineStates,
-} from './types'
+} from '../types'
 
 /**
  * User story:

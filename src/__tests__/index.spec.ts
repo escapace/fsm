@@ -1,7 +1,7 @@
 /* eslint-disable typescript/ban-ts-comment */
 
 import { cloneDeep } from 'es-toolkit'
-import { interpret, STATE_MACHINE_LOG, STATE_MACHINE_STATE, stateMachine } from './index'
+import { interpret, STATE_MACHINE_LOG, STATE_MACHINE_STATE, stateMachine } from '../index'
 
 import { assert, describe, it, vi } from 'vitest'
 
@@ -46,7 +46,7 @@ const change = (...values: Array<10 | 25 | 5 | 50>) =>
     }, [])
     .sort((a, b) => a - b)
 
-describe('./src/index.spec.ts', () => {
+describe('./src/__tests__/index.spec.ts', () => {
   const spyTransition = vi.fn()
   const spyObservable = vi.fn()
 

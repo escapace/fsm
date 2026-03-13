@@ -121,7 +121,7 @@ console.log(service.state) // 'working'
 
 These points are worth knowing up front:
 
-- `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail,
+- `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail; this is deliberate, because both cases have the same observable machine effect (no state change, no context change, no subscription notification), and the API is intentionally optimized for the common question `did the machine advance?`,
 - the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
 - reducers may either mutate the existing context object or return a new one,
 - subscription callbacks are best treated as immediate notifications rather than durable event records; code that needs retained history should copy the received values,

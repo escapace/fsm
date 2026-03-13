@@ -1,5 +1,5 @@
 import { assert, describe, it } from 'vitest'
-import { interpret, stateMachine, type InferStateMachineModel } from './index'
+import { interpret, stateMachine, type InferStateMachineModel } from '../index'
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false

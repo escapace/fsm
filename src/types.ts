@@ -317,15 +317,35 @@ export type StateMachineSubscription<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > = (change: Readonly<StateMachineChange<T>>) => void
 
-export interface StateMachineService<
+export type StateMachineDo<T extends StateMachineBuilderModel = StateMachineBuilderModel> = <
+  A extends StateMachineActions<T>,
+  B extends StateMachineActionPayload<T, A>,
+>(
+  action: A,
+  ...input: $.If<$.Is.Never<B>, [], [B]>
+) => boolean
+
+export interface StateMachineReadable<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > {
   readonly context: T['state']['context']
   readonly state: StateMachineStates<T>
-  do: <A extends StateMachineActions<T>, B extends StateMachineActionPayload<T, A>>(
-    action: A,
-    ...input: $.If<$.Is.Never<B>, [], [B]>
-  ) => boolean
+}
+
+export interface StateMachineDraft<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+> extends StateMachineReadable<T> {
+  do: StateMachineDo<T>
+  commit: () => void
+  discard: () => void
+  draft: () => StateMachineDraft<T>
+}
+
+export interface StateMachineService<
+  T extends StateMachineBuilderModel = StateMachineBuilderModel,
+> extends StateMachineReadable<T> {
+  do: StateMachineDo<T>
+  draft: () => StateMachineDraft<T>
   subscribe: (subscription: StateMachineSubscription<T>) => () => void
 }
 

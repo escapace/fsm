@@ -4,6 +4,9 @@ export const STATE_MACHINE_ERROR_TYPES = [
   'ActionExists',
   'ActionOverlap',
   'ActionUnknown',
+  'DraftClosed',
+  'DraftContextCloneFailed',
+  'DraftOutOfDate',
   'GroupExists',
   'NotStateMachine',
   'StateExists',
@@ -16,6 +19,12 @@ export interface StateMachineErrorMetadata {
   ActionExists: { identifier: StateMachineIdentifier }
   ActionOverlap: { identifier: StateMachineIdentifier }
   ActionUnknown: { identifier: StateMachineIdentifier }
+
+  // eslint-disable-next-line typescript/no-empty-object-type
+  DraftClosed: {}
+  DraftContextCloneFailed: { message?: string }
+  DraftOutOfDate: { actualCursor: number; expectedCursor: number }
+
   GroupExists: { identifier: StateMachineIdentifier }
   StateExists: { identifier: StateMachineIdentifier }
   StateUnknown: { identifier: StateMachineIdentifier }
@@ -39,6 +48,12 @@ function formatMessage(cause: StateMachineErrorCause): string {
       return `Action ${formatIdentifier(cause.identifier)} overlaps a previously composed child action.`
     case 'ActionUnknown':
       return `No such action ${formatIdentifier(cause.identifier)}.`
+    case 'DraftClosed':
+      return 'Draft handle is closed.'
+    case 'DraftContextCloneFailed':
+      return cause.message ?? 'Failed to clone context for draft isolation.'
+    case 'DraftOutOfDate':
+      return `Draft is out of date (expected cursor ${cause.expectedCursor}, got ${cause.actualCursor}).`
     case 'GroupExists':
       return `Group ${formatIdentifier(cause.identifier)} already exists or conflicts with a declared state.`
     case 'NotStateMachine':

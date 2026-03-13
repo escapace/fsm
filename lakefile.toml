@@ -31,4 +31,9 @@ roots = [
   "Compose",
   "ComposeSoundness",
   "ComposeAssociativity",
+  "Replay",
+  "DraftDefs",
+  "Draft",
+  "DraftCommit",
+  "DraftNested",
 ]

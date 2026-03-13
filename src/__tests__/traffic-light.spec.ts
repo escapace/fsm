@@ -43,7 +43,7 @@
  */
 
 import { afterEach, assert, beforeEach, describe, it, vi } from 'vitest'
-import { interpret, stateMachine } from './index'
+import { interpret, stateMachine } from '../index'
 
 enum TrafficLightState {
   Green = 'GREEN',

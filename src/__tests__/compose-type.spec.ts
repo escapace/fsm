@@ -1,13 +1,13 @@
 /* eslint-disable typescript/no-unused-vars */
 import { describe, it } from 'vitest'
-import { interpret, stateMachine, type InferStateMachineModel } from './index'
+import { interpret, stateMachine, type InferStateMachineModel } from '../index'
 import type {
   StateMachineComposePrecondition,
   StateMachineActionPayload,
   StateMachineActions,
   StateMachineGroups,
   StateMachineStates,
-} from './types'
+} from '../types'
 
 // ── Type-level helpers ──────────────────────────────────────────────────
 // check<T>() constrains T to true at the call site; a false produces a
