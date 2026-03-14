@@ -157,10 +157,11 @@ Draft behavior:
 - `draft.discard()` closes the handle and drops speculative work,
 - `draft.draft()` creates a nested draft from the current draft snapshot,
 - child `commit()` merges into the parent draft only; root `commit()` replays successful draft steps onto the live service in order,
+- draft publication reconciles into the existing parent or live context instead of blindly replacing the whole value; object and array subtrees preserve next-key order, sparse-array holes, cycles, and shared-reference structure, compatible collection and binary values are updated in place, and only incompatible subtrees are replaced,
 - subscribers are notified only for successful live transitions and root draft replay,
 - `commit()` throws `DraftOutOfDate` when the parent has advanced since draft creation,
 - after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`,
-- draft creation clones context with `structuredClone`; cloning failures throw `DraftContextCloneFailed`.
+- draft creation snapshots context into detached draft data; primitives are returned unchanged, supported object graphs preserve order and topology, and unsupported values throw `DraftContextCloneFailed`.
 
 ## Known limits and non-goals
 
@@ -168,12 +169,12 @@ These points are worth knowing up front:
 
 - `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail; this is deliberate, because both cases have the same observable machine effect (no state change, no context change, no subscription notification), and the API is intentionally optimized for the common question `did the machine advance?`,
 - the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
-- reducers may either mutate the existing context object or return a new one,
-- subscription callbacks are best treated as immediate notifications rather than durable event records; code that needs retained history should copy the received values,
-- drafts require context values that `structuredClone` can clone at draft-creation time,
+- reducers may either mutate the existing context object or return a new one; for direct live root dispatch, returning a fresh object replaces `service.context`, while draft commit and composed child publication preserve the parent or live context object and reconcile nested updates into it, preserving key order, sparse array shape, and graph topology where possible and replacing only incompatible subtrees,
+- primitive context values are supported directly; draft snapshots return them unchanged, and reconciliation returns the next primitive value,
+- drafts require context values that the draft snapshotter can detach safely at draft-creation time; unsupported values such as functions throw `DraftContextCloneFailed`,
+- reconciliation and live publication do not eagerly enforce that resulting context stays draftable; unsupported values can be published and may surface later when `draft()` or another snapshot operation is requested,
 - drafts do not expose `subscribe(...)`; the publication boundary is commit,
 - conflict detection is optimistic: stale commits are rejected with `DraftOutOfDate` rather than merged,
-- draft traces are internal commit machinery, not a public history API,
 - composed machines are still flat at runtime; `.compose(...)` is authoring-time structure, not runtime hierarchy,
 - group names are not states and cannot be transition targets,
 - the library models flat state machines only; it does not provide hierarchy, parallel regions, history states, or other statechart semantics.

@@ -1,6 +1,7 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
 import { szudzik } from 'coastal'
+import { reconcileContext } from './context-runtime'
 import { StateMachineError } from './error'
 import { product } from './product'
 import {
@@ -15,26 +16,29 @@ import {
   type StateMachineInterface,
 } from './types'
 
-const CONTEXT_OWN_FACTORY = Symbol.for('@escapace/fsm/context-own-factory')
+const CONTEXT_SOURCE_ORIGIN = Symbol.for('@escapace/fsm/context-own-factory')
 
-type ContextFactory = (() => unknown) & {
-  [CONTEXT_OWN_FACTORY]?: unknown
+type StateMachineContextSource = (() => unknown) & {
+  [CONTEXT_SOURCE_ORIGIN]?: unknown
 }
 
-const getOwnFactory = (contextFactory: unknown): unknown => {
-  if (typeof contextFactory !== 'function') {
-    return contextFactory
+const unwrapContextSource = (contextSource: unknown): unknown => {
+  if (typeof contextSource !== 'function') {
+    return contextSource
   }
 
-  return (contextFactory as ContextFactory)[CONTEXT_OWN_FACTORY] ?? contextFactory
+  return (contextSource as StateMachineContextSource)[CONTEXT_SOURCE_ORIGIN] ?? contextSource
 }
 
-const composeContextFactory = (
-  ownFactory: unknown,
+const composeContextSource = (
+  ownContextSource: unknown,
   compositions: Map<StateMachineIdentifier, StateMachineInterface>,
-): ContextFactory => {
-  const factory: ContextFactory = () => {
-    const own = typeof ownFactory === 'function' ? (ownFactory as () => unknown)() : ownFactory
+): (() => unknown) => {
+  const contextSource: StateMachineContextSource = () => {
+    const own =
+      typeof ownContextSource === 'function'
+        ? (ownContextSource as () => unknown)()
+        : ownContextSource
 
     const compound: Record<StateMachineIdentifier, unknown> =
       own !== null && typeof own === 'object'
@@ -42,18 +46,25 @@ const composeContextFactory = (
         : {}
 
     for (const [group, child] of compositions.entries()) {
-      const childContext = child[STATE_MACHINE_STATE].context
+      const childContextSource = child[STATE_MACHINE_STATE].context
 
       compound[group] =
-        typeof childContext === 'function' ? (childContext as () => unknown)() : childContext
+        typeof childContextSource === 'function'
+          ? (childContextSource as () => unknown)()
+          : childContextSource
     }
 
     return compound
   }
 
-  factory[CONTEXT_OWN_FACTORY] = ownFactory
+  Object.defineProperty(contextSource, CONTEXT_SOURCE_ORIGIN, {
+    configurable: false,
+    enumerable: false,
+    value: ownContextSource,
+    writable: false,
+  })
 
-  return factory
+  return contextSource
 }
 
 const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
@@ -123,8 +134,8 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       const group = action.payload.group
 
       model.state.compositions.set(group, child)
-      model.state.context = composeContextFactory(
-        getOwnFactory(model.state.context),
+      model.state.context = composeContextSource(
+        unwrapContextSource(model.state.context),
         model.state.compositions,
       )
 
@@ -145,7 +156,10 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
             transition.reducer === undefined
               ? undefined
               : (context: Record<StateMachineIdentifier, unknown>, info: unknown) => {
-                  context[group] = transition.reducer!(context[group], info)
+                  context[group] = reconcileContext(
+                    context[group],
+                    transition.reducer!(context[group], info),
+                  )
 
                   return context
                 }
@@ -194,7 +208,10 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       model.state.context =
         model.state.compositions.size === 0
           ? action.payload.context
-          : composeContextFactory(getOwnFactory(action.payload.context), model.state.compositions)
+          : composeContextSource(
+              unwrapContextSource(action.payload.context),
+              model.state.compositions,
+            )
 
       break
     }

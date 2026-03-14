@@ -54,7 +54,7 @@ describe('compose', () => {
         [
           'Step',
           (context) => {
-            seenGuardContext(context)
+            seenGuardContext({ ...context })
             return true
           },
         ],

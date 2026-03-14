@@ -3,6 +3,7 @@
 
 import type $ from '@escapace/typelevel'
 import { remove, szudzik } from 'coastal'
+import { reconcileContext, snapshotContext } from './context-runtime'
 import { StateMachineError } from './error'
 import {
   STATE_MACHINE_STATE,
@@ -44,38 +45,6 @@ interface InternalDraftFrame {
   parent: InternalDraftFrame | undefined
   state: StateMachineIdentifier
   trace: InternalSelectedStep[]
-}
-
-const isObjectLike = (value: unknown): value is Record<PropertyKey, unknown> =>
-  typeof value === 'object' && value !== null
-
-const materializeContext = (parentContext: unknown, nextContext: unknown): unknown => {
-  if (!isObjectLike(parentContext) || !isObjectLike(nextContext)) {
-    return nextContext
-  }
-
-  for (const key of Reflect.ownKeys(parentContext)) {
-    if (!Reflect.has(nextContext, key)) {
-      Reflect.deleteProperty(parentContext, key)
-    }
-  }
-
-  for (const key of Reflect.ownKeys(nextContext)) {
-    Reflect.set(parentContext, key, Reflect.get(nextContext, key))
-  }
-
-  return parentContext
-}
-
-const cloneContext = (value: unknown): unknown => {
-  try {
-    return structuredClone(value)
-  } catch (error) {
-    throw new StateMachineError({
-      message: error instanceof Error ? error.message : undefined,
-      type: 'DraftContextCloneFailed',
-    })
-  }
 }
 
 const draftHeadCursor = (draft: InternalDraftFrame): number => draft.baseCursor + draft.trace.length
@@ -146,7 +115,7 @@ export const interpret = <T extends StateMachineInterface>(
     const frame: InternalDraftFrame = {
       baseCursor,
       closed: false,
-      context: cloneContext(parent === undefined ? context : parent.context),
+      context: snapshotContext(parent === undefined ? context : parent.context),
       indexState: parent === undefined ? indexState : parent.indexState,
       parent,
       state: parent === undefined ? state : parent.state,
@@ -178,7 +147,7 @@ export const interpret = <T extends StateMachineInterface>(
             indexState = indiceStates.get(state)!
 
             if (step.reducer !== undefined) {
-              context = materializeContext(context, step.reducer(context, step.action))
+              context = reconcileContext(context, step.reducer(context, step.action))
             }
 
             commitCursor += 1
@@ -214,7 +183,7 @@ export const interpret = <T extends StateMachineInterface>(
         frame.parent.trace.push(...frame.trace)
         frame.parent.state = frame.state
         frame.parent.indexState = frame.indexState
-        frame.parent.context = materializeContext(frame.parent.context, frame.context)
+        frame.parent.context = reconcileContext(frame.parent.context, frame.context)
 
         frame.closed = true
       },

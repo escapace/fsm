@@ -292,28 +292,7 @@ describe('draft runtime semantics', () => {
     assert.deepEqual(service.context, { add: 3, keep: 9 })
   })
 
-  it('structuredClone failure without Error instance uses default message', () => {
-    const machine = stateMachine()
-      .state('A')
-      .initial('A')
-      .action('NOP')
-      .context(() => ({ ok: true }))
-      .transition('A', 'NOP', 'A')
-
-    const service = interpret(machine)
-    const spy = vi.spyOn(globalThis, 'structuredClone').mockImplementation((() => {
-      throw 'clone-failed'
-    }) as typeof structuredClone)
-
-    try {
-      assert.throws(() => service.draft(), 'Failed to clone context for draft isolation.')
-      assertErrorType(() => service.draft(), 'DraftContextCloneFailed')
-    } finally {
-      spy.mockRestore()
-    }
-  })
-
-  it('structuredClone failure rejects draft creation cleanly', () => {
+  it('draft creation rejects unsupported context values cleanly', () => {
     const machine = stateMachine()
       .state('A')
       .initial('A')
