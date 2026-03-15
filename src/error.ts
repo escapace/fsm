@@ -5,6 +5,7 @@ export const STATE_MACHINE_ERROR_TYPES = [
   'ActionOverlap',
   'ActionUnknown',
   'ContextFactoryRequired',
+  'ContextGroupConflict',
   'DraftClosed',
   'DraftContextCloneFailed',
   'DraftOutOfDate',
@@ -23,6 +24,7 @@ export interface StateMachineErrorMetadata {
 
   // eslint-disable-next-line typescript/no-empty-object-type
   ContextFactoryRequired: {}
+  ContextGroupConflict: { identifier: StateMachineIdentifier }
 
   // eslint-disable-next-line typescript/no-empty-object-type
   DraftClosed: {}
@@ -54,6 +56,8 @@ function formatMessage(cause: StateMachineErrorCause): string {
       return `No such action ${formatIdentifier(cause.identifier)}.`
     case 'ContextFactoryRequired':
       return 'Context initializer must be a nullary function.'
+    case 'ContextGroupConflict':
+      return `Context key ${formatIdentifier(cause.identifier)} conflicts with a composed group name.`
     case 'DraftClosed':
       return 'Draft handle is closed.'
     case 'DraftContextCloneFailed':

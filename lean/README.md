@@ -567,9 +567,10 @@ The child machine `M_child` must have declared states and actions but does **not
 
 ### 11.2 — Group names
 
-Group names are **context keys only**. A group name:
+Group names are **reserved context keys for child slices only**. A group name:
 
 - identifies the child context slice within the compound context,
+- must not already be present as an own key in the parent context value produced by the parent context factory,
 - is never added to the merged state set `S`,
 - is not a valid transition target.
 
@@ -614,9 +615,9 @@ The compound context is constructed from the parent's own context and each child
 C_compound = C_parent & { [group₁]: C_child₁, [group₂]: C_child₂, … }
 ```
 
-The compound context factory calls the parent factory and each child's factory once per interpretation, producing an independent compound context for each instance.
+The compound context factory calls the parent factory and each child's factory once per interpretation, producing an independent compound context for each instance. If the parent context value already defines a composed group key, interpretation fails because that key is reserved for the child slice.
 
-Build order does not affect the resulting compound context: `context(...).compose(...)` and `compose(...).context(...)` produce equivalent definitions.
+Build order does not affect the resulting compound context: `context(...).compose(...)` and `compose(...).context(...)` produce equivalent definitions, including collision rejection for reserved group keys.
 
 ### 11.7 — Composition diagnostics
 
@@ -624,6 +625,7 @@ Build order does not affect the resulting compound context: `context(...).compos
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
 | Child is not a machine definition                            | "Parameter is not a state machine."                        |
 | Group name is an existing state or existing group            | "Group already exists or conflicts with a declared state." |
+| Parent context value defines a composed group key            | "Context key … conflicts with a composed group name."      |
 | Child state overlaps parent or sibling state                 | "State already exists."                                    |
 | Child action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
 

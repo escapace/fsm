@@ -82,7 +82,7 @@ The repository treats these behaviors as the user-facing semantic contract:
 - source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets,
 - `.compose(group, child)` merges child states/actions/transitions into the same flat machine,
 - states must be disjoint across parent and all children; actions must be disjoint across composed siblings,
-- group names are context keys only; transitions target explicit state identifiers.
+- group names are reserved context keys for child slices only; parent context factories must not return the same keys, and transitions target explicit state identifiers.
 
 ## Dispatch behavior
 

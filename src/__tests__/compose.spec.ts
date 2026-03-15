@@ -144,6 +144,69 @@ describe('compose', () => {
     })
   })
 
+  it('rejects parent context keys that collide with composed group names after compose', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .initial('ChildA')
+      .action('Stay')
+      .context(() => ({ value: 0 }))
+      .transition('ChildA', 'Stay', 'ChildA')
+
+    const ownContext = (() => ({ child: 123, keep: true })) as () => unknown
+
+    const machine = stateMachine()
+      .state('Root')
+      .compose('child', child)
+      .initial('Root')
+      .action('Enter')
+      .context(ownContext)
+      .transition('Root', 'Enter', 'ChildA')
+
+    try {
+      interpret(machine)
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.cause.type, 'ContextGroupConflict')
+      assert.equal(error.message, 'Context key "child" conflicts with a composed group name.')
+
+      if (isStateMachineErrorOfType(error, 'ContextGroupConflict')) {
+        assert.equal(error.cause.identifier, 'child')
+      }
+    }
+  })
+
+  it('rejects parent context keys that collide with composed group names before compose', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .initial('ChildA')
+      .action('Stay')
+      .transition('ChildA', 'Stay', 'ChildA')
+
+    const ownContext = (() => ({ child: 123, keep: true })) as () => unknown
+
+    const machine = stateMachine()
+      .state('Root')
+      .initial('Root')
+      .action('Enter')
+      .context(ownContext)
+      .compose('child', child)
+      .transition('Root', 'Enter', 'ChildA')
+
+    try {
+      interpret(machine)
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.cause.type, 'ContextGroupConflict')
+      assert.equal(error.message, 'Context key "child" conflicts with a composed group name.')
+
+      if (isStateMachineErrorOfType(error, 'ContextGroupConflict')) {
+        assert.equal(error.cause.identifier, 'child')
+      }
+    }
+  })
+
   it('supports nested composition recursively', () => {
     const leaf = stateMachine()
       .state('LeafA')

@@ -114,8 +114,19 @@ export type StateMachineCompoundContext<
   ChildContext,
 > = $.Prettify<{ [K in Group]: ChildContext } & StateMachineBaseContext<ParentContext>>
 
+export type StateMachineContextGroupConflicts<P extends StateMachineBuilderModel, U> = Extract<
+  keyof StateMachineBaseContext<U>,
+  StateMachineExistingGroups<P>
+>
+
+export type StateMachineComposeContextConflict<
+  P extends StateMachineBuilderModel,
+  G extends StateMachineIdentifierState,
+> = G extends keyof StateMachineBaseContext<P['state']['context']> ? G : never
+
 // Preserve composed child slices when `.context(...)` replaces the parent-own context.
-// New own keys override existing keys; all other existing keys are retained.
+// Group-name collisions are rejected separately; non-conflicting own keys replace only matching
+// parent-own keys, while all composed child slices and other own keys are retained.
 export type StateMachineChildModelOf<M extends StateMachineInterface> = InferStateMachineModel<M>
 export type StateMachineChildStateOf<M extends StateMachineInterface> =
   StateMachineChildModelOf<M>['state']
@@ -175,19 +186,21 @@ export type StateMachineComposePrecondition<
   M extends StateMachineInterface,
 > = G extends StateMachineExistingGroups<P> | StateMachineStates<P>
   ? never
-  : [Extract<StateMachineStates<P>, StateMachineStates<StateMachineChildModelOf<M>>>] extends [
+  : [StateMachineComposeContextConflict<P, G>] extends [never]
+    ? [Extract<StateMachineStates<P>, StateMachineStates<StateMachineChildModelOf<M>>>] extends [
         never,
       ]
-    ? // Reject if child actions overlap any previously composed sibling's actions
-      [
-        Extract<
-          StateMachineComposedChildActions<P>,
-          StateMachineActions<StateMachineChildModelOf<M>>
-        >,
-      ] extends [never]
-      ? // Reject if parent/child overlapping actions have incompatible payloads
-        [StateMachineComposePayloadConflict<P, M>] extends [never]
-        ? unknown
+      ? // Reject if child actions overlap any previously composed sibling's actions
+        [
+          Extract<
+            StateMachineComposedChildActions<P>,
+            StateMachineActions<StateMachineChildModelOf<M>>
+          >,
+        ] extends [never]
+        ? // Reject if parent/child overlapping actions have incompatible payloads
+          [StateMachineComposePayloadConflict<P, M>] extends [never]
+          ? unknown
+          : never
         : never
       : never
     : never
@@ -409,7 +422,8 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
     'action' | 'compose' | 'context' | 'initial' | 'state' | 'transition'
   >
   context: <U = never>(
-    context: () => U,
+    context: (() => U) &
+      ([StateMachineContextGroupConflicts<T, U>] extends [never] ? unknown : never),
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionContext<U>>,
     'compose' | 'transition'

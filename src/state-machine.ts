@@ -46,6 +46,12 @@ const composeContextSource = (
         ? (own as Record<StateMachineIdentifier, unknown>)
         : {}
 
+    for (const group of compositions.keys()) {
+      if (Object.hasOwn(compound, group)) {
+        throw new StateMachineError({ identifier: group, type: 'ContextGroupConflict' })
+      }
+    }
+
     for (const [group, child] of compositions.entries()) {
       const childContextSource = child[STATE_MACHINE_STATE].context
 

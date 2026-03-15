@@ -284,6 +284,61 @@ describe('compose type-level', () => {
     check<Equal<Pre, never>>()
   })
 
+  it('precondition rejects when parent context already contains the group key', () => {
+    const childA = stateMachine().state('C').initial('C').action<'X'>('X').transition('C', 'X', 'C')
+
+    const parent = stateMachine()
+      .state('Root')
+      .initial('Root')
+      .action<'Y'>('Y')
+      .context(() => ({ g: 1, keep: true }))
+      .transition('Root', 'Y', 'Root')
+
+    type P = InferStateMachineModel<typeof parent>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof childA>
+    check<Equal<Pre, never>>()
+  })
+
+  it('context rejects when factory return type contains an existing composed group key', () => {
+    const childA = stateMachine().state('C').initial('C').action<'X'>('X').transition('C', 'X', 'C')
+
+    const parent = stateMachine()
+      .state('Root')
+      .compose('g', childA)
+      .initial('Root')
+      .action<'Y'>('Y')
+
+    // @ts-expect-error composed group keys are reserved in parent context
+    parent.context(() => ({ g: 1, keep: true }))
+  })
+
+  it('compose precondition allows parent context without the group key', () => {
+    const childA = stateMachine().state('C').initial('C').action<'X'>('X').transition('C', 'X', 'C')
+
+    const parent = stateMachine()
+      .state('Root')
+      .initial('Root')
+      .action<'Y'>('Y')
+      .context(() => ({ keep: true }))
+      .transition('Root', 'Y', 'Root')
+
+    type P = InferStateMachineModel<typeof parent>
+    type Pre = StateMachineComposePrecondition<P, 'g', typeof childA>
+    check<Equal<IsNever<Pre>, false>>()
+  })
+
+  it('context allows factory return type without an existing composed group key', () => {
+    const childA = stateMachine().state('C').initial('C').action<'X'>('X').transition('C', 'X', 'C')
+
+    const parent = stateMachine()
+      .state('Root')
+      .compose('g', childA)
+      .initial('Root')
+      .action<'Y'>('Y')
+
+    parent.context(() => ({ keep: true }))
+  })
+
   // ── Failure path: duplicate group name ────────────────────────────
   it('precondition rejects when group name is already composed', () => {
     const childA = stateMachine().state('A').initial('A').action<'X'>('X').transition('A', 'X', 'A')
