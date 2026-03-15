@@ -1,5 +1,4 @@
-import { isObjectLike as isObjectLikeValue } from 'es-toolkit/compat'
-import { isDate, isMap, isSet, isTypedArray } from 'es-toolkit/predicate'
+import { isArrayBuffer, isDate, isMap, isSet, isTypedArray } from 'es-toolkit'
 import { StateMachineError } from './error'
 
 interface ReconcileState {
@@ -7,7 +6,8 @@ interface ReconcileState {
   nextToResult: WeakMap<object, object>
 }
 
-const isArrayBuffer = (value: unknown): value is ArrayBuffer => value instanceof ArrayBuffer
+const isObjectLikeValue = (value: unknown): value is object =>
+  typeof value === 'object' && value !== null
 
 const isDataView = (value: unknown): value is DataView => value instanceof DataView
 
@@ -20,10 +20,10 @@ const cloneArrayBufferView = <T extends ArrayBufferView>(value: T): T => {
   return new Constructor(value)
 }
 
-const sameOwnKeyOrder = (left: object, right: object): boolean => {
-  const leftKeys = Reflect.ownKeys(left)
-  const rightKeys = Reflect.ownKeys(right)
-
+const sameOwnKeyOrder = (
+  leftKeys: readonly PropertyKey[],
+  rightKeys: readonly PropertyKey[],
+): boolean => {
   /* v8 ignore start -- defensive guard; supported reconciliation paths normalize key counts before order check */
   if (leftKeys.length !== rightKeys.length) {
     return false
@@ -39,15 +39,22 @@ const sameOwnKeyOrder = (left: object, right: object): boolean => {
   return true
 }
 
-const reorderOwnKeys = (value: Record<PropertyKey, unknown>, order: PropertyKey[]): void => {
-  const entries = order.map((key) => [key, Reflect.get(value, key)] as const)
+const reorderOwnKeys = (
+  value: Record<PropertyKey, unknown>,
+  order: readonly PropertyKey[],
+): void => {
+  const entries = new Array<unknown>(order.length)
 
-  for (const key of Reflect.ownKeys(value)) {
-    Reflect.deleteProperty(value, key)
+  for (let index = 0; index < order.length; index += 1) {
+    entries[index] = value[order[index]]
   }
 
-  for (const [key, entry] of entries) {
-    Reflect.set(value, key, entry)
+  for (let index = 0; index < order.length; index += 1) {
+    Reflect.deleteProperty(value, order[index])
+  }
+
+  for (let index = 0; index < order.length; index += 1) {
+    value[order[index]] = entries[index]
   }
 }
 
@@ -122,10 +129,12 @@ const snapshotValue = (value: unknown, seen: WeakMap<object, unknown>): unknown 
 
   const prototype = Object.getPrototypeOf(objectValue) as object | null
   const snapshot = Object.create(prototype) as Record<PropertyKey, unknown>
+  const ownKeys = Reflect.ownKeys(objectValue)
   seen.set(objectValue, snapshot)
 
-  for (const key of Reflect.ownKeys(objectValue)) {
-    snapshot[key] = snapshotValue(Reflect.get(objectValue, key), seen)
+  for (let index = 0; index < ownKeys.length; index += 1) {
+    const key = ownKeys[index]
+    snapshot[key] = snapshotValue(objectValue[key], seen)
   }
 
   return snapshot
@@ -136,6 +145,9 @@ const reconcileValue = (
   nextValue: unknown,
   state: ReconcileState,
 ): unknown => {
+  // Value reads and writes use indexed property access because reconciliation only touches keys
+  // that already came from explicit own-key enumeration. `Reflect` is reserved here for
+  // meta-operations: own-key enumeration, own-key presence checks, and deletions.
   if (Object.is(currentValue, nextValue)) {
     return currentValue
   }
@@ -245,20 +257,26 @@ const reconcileValue = (
     return currentValue
   }
 
-  for (const key of Reflect.ownKeys(currentObjectValue)) {
+  const currentOwnKeys = Reflect.ownKeys(currentObjectValue)
+  const nextOwnKeys = Reflect.ownKeys(nextObjectValue)
+
+  for (let index = 0; index < currentOwnKeys.length; index += 1) {
+    const key = currentOwnKeys[index]
+
     if (!Reflect.has(nextObjectValue, key)) {
       Reflect.deleteProperty(currentObjectValue, key)
     }
   }
 
-  for (const key of Reflect.ownKeys(nextObjectValue)) {
-    const currentEntry = Reflect.get(currentObjectValue, key)
-    const nextEntry = Reflect.get(nextObjectValue, key)
-    Reflect.set(currentObjectValue, key, reconcileValue(currentEntry, nextEntry, state))
+  for (let index = 0; index < nextOwnKeys.length; index += 1) {
+    const key = nextOwnKeys[index]
+    const currentEntry = currentObjectValue[key]
+    const nextEntry = nextObjectValue[key]
+    currentObjectValue[key] = reconcileValue(currentEntry, nextEntry, state)
   }
 
-  if (!sameOwnKeyOrder(currentObjectValue, nextObjectValue)) {
-    reorderOwnKeys(currentObjectValue, Reflect.ownKeys(nextObjectValue))
+  if (!sameOwnKeyOrder(Reflect.ownKeys(currentObjectValue), nextOwnKeys)) {
+    reorderOwnKeys(currentObjectValue, nextOwnKeys)
   }
 
   return currentValue
@@ -269,9 +287,12 @@ const reconcileValue = (
  *
  * @remarks
  * This function preserves the `parentContext` reference when the current and next values can be
- * updated in place. For plain objects and arrays, reconciliation preserves the next graph's own-key
- * order, sparse-array holes, cycles, and shared-reference topology. For `Date`, `Map`, `Set`,
- * `ArrayBuffer`, `DataView`, and typed-array values, compatible instances are updated in place.
+ * updated in place. Reconciliation uses one canonical graph walk: arrays reconcile by index, plain
+ * objects reconcile by own-key enumeration, deletion of keys absent from the next object, recursive
+ * update in next-key order, and final key-order normalization when needed. This preserves the next
+ * graph's own-key order, sparse-array holes, cycles, and shared-reference topology. For `Date`,
+ * `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array values, compatible instances are updated
+ * in place.
  *
  * When a subtree cannot be updated in place, the function replaces only that subtree and preserves
  * the surrounding parent object when possible. Replacement occurs for primitive or object-kind
