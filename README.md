@@ -94,6 +94,17 @@ The repository treats these behaviors as the user-facing semantic contract:
 - `draft()` — creates an isolated draft handle
 - `subscribe(callback)` — observes successful transitions
 
+### Outcome model
+
+The public API uses return values for ordinary machine outcomes and thrown errors for invalid operations.
+
+- `do(...)` returns whether a valid dispatch selected and executed a transition,
+- builder validation throws when a machine definition is invalid,
+- undeclared actions throw instead of returning `false`, because they are outside the declared machine contract,
+- draft lifecycle operations succeed silently on valid handles and throw when the handle is closed, stale, or cannot be created from the current context.
+
+This split keeps the hot dispatch path optimized for the common question `did the machine advance?` while preserving explicit errors for invalid calls and optimistic-concurrency conflicts.
+
 ### `do(action, payload?)`
 
 `do(...)` has three outcomes:
@@ -154,12 +165,12 @@ console.log(service.context) // { steps: 1 }
 Draft behavior:
 
 - `draft.do(action, payload?)` returns `true` on a selected transition, returns `false` on the same two failure cases as service dispatch, and throws for undeclared actions,
-- `draft.discard()` closes the handle and drops speculative work,
-- `draft.draft()` creates a nested draft from the current draft snapshot,
+- `draft.discard()` closes the handle and drops speculative work; it does not report a machine outcome and throws `DraftClosed` if the handle is no longer operational,
+- `draft.draft()` creates a nested draft from the current draft snapshot and throws `DraftClosed` when called on a closed draft or beneath a closed ancestor,
 - child `commit()` merges into the parent draft only; root `commit()` replays successful draft steps onto the live service in order,
+- `commit()` returns normally on success, including an empty-trace no-op commit, and throws `DraftOutOfDate` when the parent has advanced since draft creation,
 - draft publication reconciles into the existing parent or live context instead of blindly replacing the whole value; ordinary mutable object and array subtrees preserve next-key order, sparse-array holes, cycles, and shared-reference structure, compatible collection and binary values are updated in place, and only incompatible subtrees are replaced; plain-object reconciliation does not guarantee preservation of arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable retained properties,
 - subscribers are notified only for successful live transitions and root draft replay,
-- `commit()` throws `DraftOutOfDate` when the parent has advanced since draft creation,
 - after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`,
 - draft creation snapshots context into detached draft data; primitives are returned unchanged, supported object graphs preserve order and topology, and unsupported values throw `DraftContextCloneFailed`.
 
