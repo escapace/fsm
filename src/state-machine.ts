@@ -1,6 +1,7 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
 import { szudzik } from 'coastal'
+import { assertContextFactory } from './assert-context-factory'
 import { reconcileContext } from './context-runtime'
 import { StateMachineError } from './error'
 import { product } from './product'
@@ -22,23 +23,23 @@ type StateMachineContextSource = (() => unknown) & {
   [CONTEXT_SOURCE_ORIGIN]?: unknown
 }
 
-const unwrapContextSource = (contextSource: unknown): unknown => {
-  if (typeof contextSource !== 'function') {
-    return contextSource
+const unwrapContextSource = (contextSource: unknown): (() => unknown) | undefined => {
+  if (contextSource === undefined) {
+    return undefined
   }
 
-  return (contextSource as StateMachineContextSource)[CONTEXT_SOURCE_ORIGIN] ?? contextSource
+  assertContextFactory(contextSource)
+
+  return ((contextSource as StateMachineContextSource)[CONTEXT_SOURCE_ORIGIN] ??
+    contextSource) as () => unknown
 }
 
 const composeContextSource = (
-  ownContextSource: unknown,
+  ownContextSource: (() => unknown) | undefined,
   compositions: Map<StateMachineIdentifier, StateMachineInterface>,
 ): (() => unknown) => {
   const contextSource: StateMachineContextSource = () => {
-    const own =
-      typeof ownContextSource === 'function'
-        ? (ownContextSource as () => unknown)()
-        : ownContextSource
+    const own = ownContextSource === undefined ? undefined : ownContextSource()
 
     const compound: Record<StateMachineIdentifier, unknown> =
       own !== null && typeof own === 'object'
@@ -48,10 +49,11 @@ const composeContextSource = (
     for (const [group, child] of compositions.entries()) {
       const childContextSource = child[STATE_MACHINE_STATE].context
 
-      compound[group] =
-        typeof childContextSource === 'function'
-          ? (childContextSource as () => unknown)()
-          : childContextSource
+      if (childContextSource !== undefined) {
+        assertContextFactory(childContextSource)
+      }
+
+      compound[group] = childContextSource === undefined ? undefined : childContextSource()
     }
 
     return compound
@@ -205,6 +207,8 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       break
     }
     case StateMachineBuilderActionType.Context: {
+      assertContextFactory(action.payload.context)
+
       model.state.context =
         model.state.compositions.size === 0
           ? action.payload.context
@@ -294,7 +298,7 @@ const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdent
   }
 }
 
-const context = (model: StateMachineBuilderModel) => (argument: unknown) => {
+const context = (model: StateMachineBuilderModel) => (argument: () => unknown) => {
   const next = reduce(model, {
     payload: {
       context: argument,

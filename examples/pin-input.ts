@@ -170,13 +170,6 @@ export interface PinInputContext {
  * @returns Configured state machine ready for interpretation and use
  */
 export function createPinInputMachine(config: PinInputConfig) {
-  const initialContext: PinInputContext = {
-    config,
-    focusedIndex: -1,
-    isComplete: false,
-    values: new Array<string>(config.length).fill(''),
-  }
-
   return (
     stateMachine()
       .state(PinInputState.Idle)
@@ -192,7 +185,12 @@ export function createPinInputMachine(config: PinInputConfig) {
       .action(PinInputAction.Submit)
       .action(PinInputAction.Blur)
       .action(PinInputAction.Reset)
-      .context<PinInputContext>(initialContext)
+      .context<PinInputContext>(() => ({
+        config,
+        focusedIndex: -1,
+        isComplete: false,
+        values: new Array<string>(config.length).fill(''),
+      }))
       // Focus transitions
       .transition(
         PinInputState.Idle,

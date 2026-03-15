@@ -26,7 +26,7 @@ describe('compose type-level', () => {
     .state('Off')
     .initial('On')
     .action<'Toggle'>('Toggle')
-    .context({ toggles: 0 })
+    .context(() => ({ toggles: 0 }))
     .transition('On', 'Toggle', 'Off')
     .transition('Off', 'Toggle', 'On')
 
@@ -35,7 +35,7 @@ describe('compose type-level', () => {
     .compose('power', child)
     .initial('Idle')
     .action<'Start'>('Start')
-    .context({ starts: 0 })
+    .context(() => ({ starts: 0 }))
     .transition('Idle', 'Start', 'On')
     .transition(['On', 'Off'], 'Start', 'Idle')
 
@@ -116,7 +116,7 @@ describe('compose type-level', () => {
       .compose('power', child)
       .initial('Idle')
       .action<'Start'>('Start')
-      .context({ starts: 0 })
+      .context(() => ({ starts: 0 }))
       .transition(
         'Idle',
         [
@@ -147,7 +147,7 @@ describe('compose type-level', () => {
       .state('X')
       .initial('X')
       .action<'Typed', { n: number }>('Typed')
-      .context(0)
+      .context(() => 0)
       .transition('X', 'Typed', 'X')
 
     const withTypedChild = stateMachine()
@@ -168,7 +168,7 @@ describe('compose type-level', () => {
       .state('Y')
       .initial('X')
       .action<'Typed', { n: number }>('Typed')
-      .context({ count: 0 })
+      .context(() => ({ count: 0 }))
       .transition(
         'X',
         [
@@ -199,7 +199,7 @@ describe('compose type-level', () => {
       .state('X')
       .initial('X')
       .action<'Typed', { n: number }>('Typed')
-      .context(0)
+      .context(() => 0)
       .transition('X', 'Typed', 'X')
 
     const machine = stateMachine()

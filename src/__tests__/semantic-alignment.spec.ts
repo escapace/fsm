@@ -8,6 +8,30 @@ import {
 } from '../index'
 
 describe('Lean tranche alignment (P1–P6)', () => {
+  it('supports machines without context and exposes undefined service context', () => {
+    enum S {
+      A = 'A',
+      B = 'B',
+    }
+    enum A {
+      Next = 'NEXT',
+    }
+
+    const machine = stateMachine()
+      .state(S.A)
+      .state(S.B)
+      .initial(S.A)
+      .action(A.Next)
+      .transition(S.A, A.Next, S.B)
+
+    const service = interpret(machine)
+
+    assert.equal(service.context, undefined)
+    assert.equal(service.do(A.Next), true)
+    assert.equal(service.state, S.B)
+    assert.equal(service.context, undefined)
+  })
+
   it('P1: dispatch is deterministic for identical machine and action sequence', () => {
     enum S {
       A = 'A',
@@ -291,6 +315,22 @@ describe('Lean tranche alignment (P1–P6)', () => {
     } catch (error) {
       assert.ok(isStateMachineError(error))
       assert.equal(error.message, 'State Symbol(myState) already exists.')
+    }
+  })
+
+  it('rejects non-function context initializers', () => {
+    try {
+      stateMachine()
+        .state('A')
+        .initial('A')
+        .action('Go')
+        // @ts-expect-error runtime validation for JavaScript callers and casts
+        .context({ count: 0 })
+      assert.fail('expected error')
+    } catch (error) {
+      assert.ok(isStateMachineError(error))
+      assert.equal(error.cause.type, 'ContextFactoryRequired')
+      assert.equal(error.message, 'Context initializer must be a nullary function.')
     }
   })
 

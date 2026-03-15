@@ -3,6 +3,7 @@
 
 import type $ from '@escapace/typelevel'
 import { remove, szudzik } from 'coastal'
+import { assertContextFactory } from './assert-context-factory'
 import { reconcileContext, snapshotContext } from './context-runtime'
 import { StateMachineError } from './error'
 import {
@@ -85,8 +86,10 @@ export const interpret = <T extends StateMachineInterface>(
     transitions: transitionMap,
   } = stateMachine[STATE_MACHINE_STATE]
 
-  // eslint-disable-next-line typescript/no-unsafe-call
-  let context: unknown = typeof contextFactory === 'function' ? contextFactory() : contextFactory
+  let context: unknown =
+    contextFactory === undefined
+      ? undefined
+      : (assertContextFactory(contextFactory), contextFactory())
   let state: StateMachineIdentifier = initial!
   let indexState = indiceStates.get(state)!
   let commitCursor = 0

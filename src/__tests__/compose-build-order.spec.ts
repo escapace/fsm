@@ -14,7 +14,7 @@ describe('compose build-order edge cases', () => {
       .state('Off')
       .initial('On')
       .action<'Toggle'>('Toggle')
-      .context({ toggles: 0 })
+      .context(() => ({ toggles: 0 }))
       .transition('On', 'Toggle', 'Off', (context) => ({ toggles: context.toggles + 1 }))
       .transition('Off', 'Toggle', 'On', (context) => ({ toggles: context.toggles + 1 }))
 
@@ -22,7 +22,7 @@ describe('compose build-order edge cases', () => {
       .state('Idle')
       .initial('Idle')
       .action<'Start'>('Start')
-      .context({ starts: 0 })
+      .context(() => ({ starts: 0 }))
       .compose('power', child)
       .transition('Idle', 'Start', 'On')
 
@@ -58,14 +58,14 @@ describe('compose build-order edge cases', () => {
       .state('A1')
       .initial('A1')
       .action<'TickA'>('TickA')
-      .context({ a: 0 })
+      .context(() => ({ a: 0 }))
       .transition('A1', 'TickA', 'A1', (context) => ({ a: context.a + 1 }))
 
     const childB = stateMachine()
       .state('B1')
       .initial('B1')
       .action<'TickB'>('TickB')
-      .context({ b: 0 })
+      .context(() => ({ b: 0 }))
       .transition('B1', 'TickB', 'B1', (context) => ({ b: context.b + 1 }))
 
     const parent = stateMachine()
@@ -73,7 +73,7 @@ describe('compose build-order edge cases', () => {
       .compose('left', childA)
       .initial('Idle')
       .action<'EnterLeft'>('EnterLeft')
-      .context({ root: 1 })
+      .context(() => ({ root: 1 }))
       .compose('right', childB)
       .action<'EnterRight'>('EnterRight')
       .transition('Idle', 'EnterLeft', 'A1')

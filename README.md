@@ -31,7 +31,7 @@ const machine = stateMachine()
   .initial(State.Locked)
   .action<Action.Coin, { coin: Coin }>(Action.Coin)
   .action(Action.Push)
-  .context<{ total: number }>({ total: 0 })
+  .context<{ total: number }>(() => ({ total: 0 }))
   .transition(
     State.Locked,
     [Action.Coin, (context, action) => context.total + action.payload.coin >= 50],
@@ -190,7 +190,7 @@ Creates a machine builder.
 - `.state(name)` — declare a state
 - `.initial(state)` — set the initial state
 - `.action<Type, Payload>(name)` — declare an action and optional payload type
-- `.context<Type>(initialValue)` — set the initial context value or factory
+- `.context<Type>(() => initialValue)` — set the initial context factory
 - `.compose(group, childMachine)` — merge a child builder into the current machine (flat semantics)
 - `.transition(source, action, target, reducer?)` — declare a transition (target is an explicit state)
 

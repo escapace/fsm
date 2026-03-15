@@ -38,7 +38,7 @@ where:
 
 - `S` is a finite, non-empty, ordered set of **state identifiers**. Order is declaration order.
 - `A` is a finite, non-empty, ordered set of **action identifiers**. Order is declaration order.
-- `C₀` is the **initial context**, either a value or a nullary factory function. When `C₀` is a function, it is called exactly once per interpretation to produce the initial context value.
+- `C₀` is the **initial context factory**, a nullary function called exactly once per interpretation to produce the initial context value.
 - `s₀ ∈ S` is the **initial state**. Required for standalone interpretation; may be absent in a child machine used only through composition (§11.1).
 - `T` is a finite, ordered list of **transition rules** (see §1.3).
 
@@ -393,13 +393,9 @@ The semantic model treats context as a value. Context cloning at draft creation,
 
 ## 5 — Context initialization
 
-### 5.1 — Value initialization
+### 5.1 — Factory initialization
 
-If `C₀` is not a function, the initial context of each machine instance is `C₀` directly. Multiple instances share the same reference.
-
-### 5.2 — Factory initialization
-
-If `C₀` is a function (nullary), the initial context of each machine instance is the return value of `C₀()`. The factory is called exactly once per `interpret(M)` call, producing an independent context for each instance.
+`C₀` is a nullary factory function. The initial context of each machine instance is the return value of `C₀()`. The factory is called exactly once per `interpret(M)` call, producing an independent context for each instance.
 
 ## 6 — Definition-time errors
 
@@ -413,6 +409,7 @@ These errors are raised during machine construction (builder calls), not during 
 | Referencing a source or target state not in `S` in a transition                     | "No such state."                                           |
 | Referencing an action not in `A` in a transition                                    | "No such action."                                          |
 | Calling `interpret` on a value that is not a machine definition                     | "Parameter is not a state machine."                        |
+| Providing a non-function context initializer                                        | "Context initializer must be a nullary function."          |
 | Composing with a group name that is an existing state or group                      | "Group already exists or conflicts with a declared state." |
 | Composing with a child whose state names overlap parent or sibling states           | "State already exists."                                    |
 | Composing with a child whose action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
@@ -472,7 +469,7 @@ For any `sources = [s₁, …, sₘ]`, `targets = [t₁, …, tₙ]`, `action a`
 
 ### P7 — Context initialization (optional)
 
-When `C₀` is a factory function, each call to `interpret(M)` produces an independent initial context. When `C₀` is a value, all instances share the same initial reference.
+Each call to `interpret(M)` produces an independent initial context by invoking `C₀()` exactly once.
 
 ### P8 — Lookup abstraction (optional)
 
@@ -617,7 +614,7 @@ The compound context is constructed from the parent's own context and each child
 C_compound = C_parent & { [group₁]: C_child₁, [group₂]: C_child₂, … }
 ```
 
-When the parent context is a factory function, the compound context factory calls the parent factory and each child's factory (or value) once per interpretation, producing an independent compound context for each instance.
+The compound context factory calls the parent factory and each child's factory once per interpretation, producing an independent compound context for each instance.
 
 Build order does not affect the resulting compound context: `context(...).compose(...)` and `compose(...).context(...)` produce equivalent definitions.
 

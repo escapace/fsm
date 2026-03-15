@@ -49,7 +49,7 @@ const buildFraudMachine = () =>
     .state('FraudBlock')
     .initial('FraudPending')
     .action<'Screen', { score: number }>('Screen')
-    .context<FraudContext>({ lastScore: null, reviewed: 0 })
+    .context<FraudContext>(() => ({ lastScore: null, reviewed: 0 }))
     .transition(
       'FraudPending',
       [
@@ -91,7 +91,7 @@ const buildPaymentMachine = () => {
     .action<'StartFraud'>('StartFraud')
     .action<'Capture', { processorId: string }>('Capture')
     .action<'Decline'>('Decline')
-    .context<PaymentContext>({ attempts: 0, capturedBy: null })
+    .context<PaymentContext>(() => ({ attempts: 0, capturedBy: null }))
     .transition('PaymentIdle', 'StartAuth', 'PaymentAuthorizing', (context) => {
       context.attempts += 1
 
@@ -120,7 +120,7 @@ const buildOrderMachine = () => {
     .action<'SubmitOrder', { orderId: string; total: number }>('SubmitOrder')
     .action<'FinalizeOrder'>('FinalizeOrder')
     .action<'Cancel'>('Cancel')
-    .context<OrderContext>({ checkpoints: [], orderId: null, total: 0 })
+    .context<OrderContext>(() => ({ checkpoints: [], orderId: null, total: 0 }))
     .transition('Cart', 'BeginCheckout', 'Checkout', (context) => {
       context.checkpoints.push('checkout')
 

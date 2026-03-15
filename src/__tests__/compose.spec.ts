@@ -14,7 +14,7 @@ describe('compose', () => {
       .state('Off')
       .initial('On')
       .action('Toggle')
-      .context({ toggles: 0 })
+      .context(() => ({ toggles: 0 }))
       .transition('On', 'Toggle', 'Off', (context) => ({ toggles: context.toggles + 1 }))
       .transition('Off', 'Toggle', 'On', (context) => ({ toggles: context.toggles + 1 }))
 
@@ -24,7 +24,7 @@ describe('compose', () => {
       .initial('Idle')
       .action('Start')
       .action('Stop')
-      .context({ starts: 0 })
+      .context(() => ({ starts: 0 }))
       .transition('Idle', 'Start', 'On', (context) => ({ ...context, starts: 1 }))
       .transition(['On', 'Off'], 'Stop', 'Idle')
 
@@ -48,7 +48,7 @@ describe('compose', () => {
       .state('ChildB')
       .initial('ChildA')
       .action('Step')
-      .context({ value: 0 })
+      .context(() => ({ value: 0 }))
       .transition(
         'ChildA',
         [
@@ -67,7 +67,7 @@ describe('compose', () => {
       .compose('child', child)
       .initial('Idle')
       .action('Enter')
-      .context({ parent: 41 })
+      .context(() => ({ parent: 41 }))
       .transition('Idle', 'Enter', 'ChildA')
 
     const service = interpret(machine)
@@ -85,13 +85,72 @@ describe('compose', () => {
     })
   })
 
+  it('composes a child context when the parent has no context', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .state('ChildB')
+      .initial('ChildA')
+      .action('Step')
+      .context(() => ({ value: 0 }))
+      .transition('ChildA', 'Step', 'ChildB', (context) => ({ value: context.value + 1 }))
+
+    const machine = stateMachine()
+      .state('Idle')
+      .compose('child', child)
+      .initial('Idle')
+      .action('Enter')
+      .transition('Idle', 'Enter', 'ChildA')
+
+    const service = interpret(machine)
+
+    assert.deepEqual(service.context, {
+      child: { value: 0 },
+    })
+
+    assert.equal(service.do('Enter'), true)
+    assert.equal(service.state, 'ChildA')
+    assert.equal(service.do('Step'), true)
+    assert.equal(service.state, 'ChildB')
+    assert.deepEqual(service.context, {
+      child: { value: 1 },
+    })
+  })
+
+  it('preserves an undefined child slice when both parent and child omit context', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .initial('ChildA')
+      .action('Stay')
+      .transition('ChildA', 'Stay', 'ChildA')
+
+    const machine = stateMachine()
+      .state('Idle')
+      .compose('child', child)
+      .initial('Idle')
+      .action('Enter')
+      .transition('Idle', 'Enter', 'ChildA')
+
+    const service = interpret(machine)
+
+    assert.deepEqual(service.context, {
+      child: undefined,
+    })
+
+    assert.equal(service.do('Enter'), true)
+    assert.equal(service.state, 'ChildA')
+    assert.equal(service.do('Stay'), true)
+    assert.deepEqual(service.context, {
+      child: undefined,
+    })
+  })
+
   it('supports nested composition recursively', () => {
     const leaf = stateMachine()
       .state('LeafA')
       .state('LeafB')
       .initial('LeafA')
       .action('LeafNext')
-      .context({ n: 0 })
+      .context(() => ({ n: 0 }))
       .transition('LeafA', 'LeafNext', 'LeafB', (context) => ({ n: context.n + 1 }))
 
     const middle = stateMachine()
@@ -99,7 +158,7 @@ describe('compose', () => {
       .compose('leaf', leaf)
       .initial('MiddleIdle')
       .action('EnterLeaf')
-      .context({ m: 0 })
+      .context(() => ({ m: 0 }))
       .transition('MiddleIdle', 'EnterLeaf', 'LeafA')
 
     const root = stateMachine()
@@ -107,7 +166,7 @@ describe('compose', () => {
       .compose('middle', middle)
       .initial('RootIdle')
       .action('EnterMiddle')
-      .context({ r: 0 })
+      .context(() => ({ r: 0 }))
       .transition('RootIdle', 'EnterMiddle', 'MiddleIdle')
 
     const service = interpret(root)

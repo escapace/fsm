@@ -19,6 +19,79 @@ const assertErrorType = (function_: () => unknown, type: StateMachineErrorType) 
 }
 
 describe('draft runtime semantics', () => {
+  it('service.draft() preserves undefined context for machines without context', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('NEXT')
+      .transition('A', 'NEXT', 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(service.context, undefined)
+    assert.equal(draft.context, undefined)
+    assert.equal(draft.do('NEXT'), true)
+    assert.equal(service.state, 'A')
+    assert.equal(service.context, undefined)
+
+    draft.commit()
+
+    assert.equal(service.state, 'B')
+    assert.equal(service.context, undefined)
+  })
+
+  it('service.draft() captures isolated composed child context when the parent has no context', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .state('ChildB')
+      .initial('ChildA')
+      .action('STEP')
+      .context(() => ({ value: 0 }))
+      .transition('ChildA', 'STEP', 'ChildB', (context) => ({ value: context.value + 1 }))
+
+    const machine = stateMachine()
+      .state('Idle')
+      .compose('child', child)
+      .initial('Idle')
+      .action('ENTER')
+      .transition('Idle', 'ENTER', 'ChildA')
+
+    const service = interpret(machine)
+
+    assert.deepEqual(service.context, {
+      child: { value: 0 },
+    })
+
+    assert.equal(service.do('ENTER'), true)
+
+    const parentContextReference = service.context
+    const childContextReference = parentContextReference.child
+    const draft = service.draft()
+
+    assert.notEqual(draft.context, parentContextReference)
+    assert.notEqual(draft.context.child, childContextReference)
+    assert.deepEqual(draft.context, {
+      child: { value: 0 },
+    })
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(service.state, 'ChildA')
+    assert.deepEqual(service.context, {
+      child: { value: 0 },
+    })
+
+    draft.commit()
+
+    assert.equal(service.state, 'ChildB')
+    assert.equal(service.context, parentContextReference)
+    assert.equal(service.context.child, childContextReference)
+    assert.deepEqual(service.context, {
+      child: { value: 1 },
+    })
+  })
+
   it('service.draft() captures isolated snapshot and leaves parent unchanged', () => {
     const machine = stateMachine()
       .state('A')

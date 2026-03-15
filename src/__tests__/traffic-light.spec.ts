@@ -85,11 +85,11 @@ describe('Traffic Light State Machine', () => {
       .action(TrafficLightAction.Timer)
       .action(TrafficLightAction.Emergency)
       .action(TrafficLightAction.Reset)
-      .context<TrafficLightContext>({
+      .context<TrafficLightContext>(() => ({
         cycleCount: 0,
         emergencyActive: false,
         lastTransition: 0,
-      })
+      }))
       .transition(
         TrafficLightState.Red,
         TrafficLightAction.Timer,
@@ -155,11 +155,11 @@ describe('Traffic Light State Machine', () => {
       .action(TrafficLightAction.Timer)
       .action(TrafficLightAction.Emergency)
       .action(TrafficLightAction.Reset)
-      .context<TrafficLightContext>({
+      .context<TrafficLightContext>(() => ({
         cycleCount: 0,
         emergencyActive: false,
         lastTransition: 0,
-      })
+      }))
       .transition(
         [TrafficLightState.Red, TrafficLightState.Yellow, TrafficLightState.Green],
         TrafficLightAction.Emergency,
@@ -208,11 +208,11 @@ describe('Traffic Light State Machine', () => {
       .state(TrafficLightState.Green)
       .initial(TrafficLightState.Red)
       .action(TrafficLightAction.Timer)
-      .context<TrafficLightContext>({
+      .context<TrafficLightContext>(() => ({
         cycleCount: 0,
         emergencyActive: false,
         lastTransition: 0,
-      })
+      }))
       .transition(TrafficLightState.Red, TrafficLightAction.Timer, TrafficLightState.Green)
       .transition(TrafficLightState.Green, TrafficLightAction.Timer, TrafficLightState.Yellow)
       .transition(TrafficLightState.Yellow, TrafficLightAction.Timer, TrafficLightState.Red)
@@ -244,11 +244,11 @@ describe('Traffic Light State Machine', () => {
       .state(TrafficLightState.Green)
       .initial(TrafficLightState.Red)
       .action(TrafficLightAction.Timer)
-      .context<TrafficLightContext>({
+      .context<TrafficLightContext>(() => ({
         cycleCount: 0,
         emergencyActive: false,
         lastTransition: Date.now(),
-      })
+      }))
       .transition(
         TrafficLightState.Red,
         TrafficLightAction.Timer,

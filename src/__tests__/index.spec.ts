@@ -57,7 +57,7 @@ describe('./src/__tests__/index.spec.ts', () => {
     .initial(TypeState.Locked)
     .action<TypeAction.Coin, PayloadCoin>(TypeAction.Coin)
     .action(TypeAction.Push)
-    .context<TurnstileState>({ active: [], coins: [] })
+    .context<TurnstileState>(() => ({ active: [], coins: [] }))
     .transition(
       [TypeState.Locked, TypeState.Waiting],
       [
@@ -510,7 +510,7 @@ describe('./src/__tests__/index.spec.ts', () => {
       .action<TestAction.Always>(TestAction.Always)
       .action<TestAction.Never>(TestAction.Never)
       .action<TestAction.Conditional, { shouldPass: boolean }>(TestAction.Conditional)
-      .context<TestContext>({ counter: 0 })
+      .context<TestContext>(() => ({ counter: 0 }))
       // Transition that always succeeds (no predicate)
       .transition(TestState.StateA, TestAction.Always, TestState.StateB)
       // Transition with predicate that always fails

@@ -116,10 +116,10 @@ describe('Turnstile State Machine', () => {
       .state(TurnstileState.Unlocked)
       .initial(TurnstileState.Locked)
       .action<TurnstileAction.Coin, PayloadCoin>(TurnstileAction.Coin)
-      .context<TurnstileContext>({
+      .context<TurnstileContext>(() => ({
         coinBalance: 0,
         pushCount: 0,
-      })
+      }))
       .transition(
         TurnstileState.Locked,
         [

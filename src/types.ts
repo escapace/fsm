@@ -48,7 +48,7 @@ export type StateMachineBuilderActionTransition<
 
 export type StateMachineBuilderActionContext<T = unknown> = StateMachineBuilderActionBase<
   StateMachineBuilderActionType.Context,
-  { context: (() => T) | T }
+  { context: () => T }
 >
 
 export type StateMachineBuilderActionState<
@@ -409,7 +409,7 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
     'action' | 'compose' | 'context' | 'initial' | 'state' | 'transition'
   >
   context: <U = never>(
-    context: (() => U) | U,
+    context: () => U,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionContext<U>>,
     'compose' | 'transition'

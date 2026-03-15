@@ -52,12 +52,12 @@ describe('Assembly Line State Machine', () => {
       .action(AssemblyAction.InspectionPass)
       .action(AssemblyAction.PackagingComplete)
       .action(AssemblyAction.Reset)
-      .context<AssemblyContext>({
+      .context<AssemblyContext>(() => ({
         completedStations: [],
         cycleCount: 0,
         defectCode: null,
         partId: '',
-      })
+      }))
       .transition(
         AssemblyState.WaitingForPart,
         AssemblyAction.PartArrived,
@@ -169,12 +169,12 @@ describe('Assembly Line State Machine', () => {
       .action(AssemblyAction.WeldComplete)
       .action(AssemblyAction.InspectionFail)
       .action(AssemblyAction.Reset)
-      .context<AssemblyContext>({
+      .context<AssemblyContext>(() => ({
         completedStations: [],
         cycleCount: 0,
         defectCode: null,
         partId: '',
-      })
+      }))
       .transition(
         AssemblyState.WaitingForPart,
         AssemblyAction.PartArrived,
@@ -243,12 +243,12 @@ describe('Assembly Line State Machine', () => {
       .action(AssemblyAction.PartArrived)
       .action(AssemblyAction.LoadComplete)
       .action(AssemblyAction.WeldComplete)
-      .context<AssemblyContext>({
+      .context<AssemblyContext>(() => ({
         completedStations: [],
         cycleCount: 0,
         defectCode: null,
         partId: '',
-      })
+      }))
       .transition(
         AssemblyState.WaitingForPart,
         AssemblyAction.PartArrived,
