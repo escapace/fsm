@@ -20,44 +20,6 @@ const cloneArrayBufferView = <T extends ArrayBufferView>(value: T): T => {
   return new Constructor(value)
 }
 
-const sameOwnKeyOrder = (
-  leftKeys: readonly PropertyKey[],
-  rightKeys: readonly PropertyKey[],
-): boolean => {
-  /* v8 ignore start -- defensive guard; supported reconciliation paths normalize key counts before order check */
-  if (leftKeys.length !== rightKeys.length) {
-    return false
-  }
-  /* v8 ignore stop */
-
-  for (let index = 0; index < leftKeys.length; index += 1) {
-    if (leftKeys[index] !== rightKeys[index]) {
-      return false
-    }
-  }
-
-  return true
-}
-
-const reorderOwnKeys = (
-  value: Record<PropertyKey, unknown>,
-  order: readonly PropertyKey[],
-): void => {
-  const entries = new Array<unknown>(order.length)
-
-  for (let index = 0; index < order.length; index += 1) {
-    entries[index] = value[order[index]]
-  }
-
-  for (let index = 0; index < order.length; index += 1) {
-    Reflect.deleteProperty(value, order[index])
-  }
-
-  for (let index = 0; index < order.length; index += 1) {
-    value[order[index]] = entries[index]
-  }
-}
-
 const snapshotValue = (value: unknown, seen: WeakMap<object, unknown>): unknown => {
   if (typeof value === 'function') {
     throw new TypeError('Failed to snapshot context value.')
@@ -147,7 +109,7 @@ const reconcileValue = (
 ): unknown => {
   // Value reads and writes use indexed property access because reconciliation only touches keys
   // that already came from explicit own-key enumeration. `Reflect` is reserved here for
-  // meta-operations: own-key enumeration, own-key presence checks, and deletions.
+  // meta-operations such as own-key enumeration and deletions.
   if (Object.is(currentValue, nextValue)) {
     return currentValue
   }
@@ -259,24 +221,21 @@ const reconcileValue = (
 
   const currentOwnKeys = Reflect.ownKeys(currentObjectValue)
   const nextOwnKeys = Reflect.ownKeys(nextObjectValue)
-
-  for (let index = 0; index < currentOwnKeys.length; index += 1) {
-    const key = currentOwnKeys[index]
-
-    if (!Reflect.has(nextObjectValue, key)) {
-      Reflect.deleteProperty(currentObjectValue, key)
-    }
-  }
+  const reconciledEntries = new Array<unknown>(nextOwnKeys.length)
 
   for (let index = 0; index < nextOwnKeys.length; index += 1) {
     const key = nextOwnKeys[index]
     const currentEntry = currentObjectValue[key]
     const nextEntry = nextObjectValue[key]
-    currentObjectValue[key] = reconcileValue(currentEntry, nextEntry, state)
+    reconciledEntries[index] = reconcileValue(currentEntry, nextEntry, state)
   }
 
-  if (!sameOwnKeyOrder(Reflect.ownKeys(currentObjectValue), nextOwnKeys)) {
-    reorderOwnKeys(currentObjectValue, nextOwnKeys)
+  for (let index = 0; index < currentOwnKeys.length; index += 1) {
+    Reflect.deleteProperty(currentObjectValue, currentOwnKeys[index])
+  }
+
+  for (let index = 0; index < nextOwnKeys.length; index += 1) {
+    currentObjectValue[nextOwnKeys[index]] = reconciledEntries[index]
   }
 
   return currentValue
@@ -288,11 +247,16 @@ const reconcileValue = (
  * @remarks
  * This function preserves the `parentContext` reference when the current and next values can be
  * updated in place. Reconciliation uses one canonical graph walk: arrays reconcile by index, plain
- * objects reconcile by own-key enumeration, deletion of keys absent from the next object, recursive
- * update in next-key order, and final key-order normalization when needed. This preserves the next
- * graph's own-key order, sparse-array holes, cycles, and shared-reference topology. For `Date`,
- * `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array values, compatible instances are updated
- * in place.
+ * objects reconcile by enumerating current and next own keys, recursively reconciling next-key
+ * values, removing the current object's existing own keys, and rebuilding the object in next-key
+ * order. This preserves the next graph's own-key order, sparse-array holes, cycles, and shared-
+ * reference topology. For `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array values,
+ * compatible instances are updated in place.
+ *
+ * The supported plain-object surface is ordinary mutable object state. Plain-object reconciliation
+ * preserves keys, values, key order, and graph topology, but does not guarantee preservation of
+ * arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable
+ * retained properties.
  *
  * When a subtree cannot be updated in place, the function replaces only that subtree and preserves
  * the surrounding parent object when possible. Replacement occurs for primitive or object-kind

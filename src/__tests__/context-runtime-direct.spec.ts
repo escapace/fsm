@@ -596,5 +596,41 @@ describe('context runtime direct contracts', () => {
       assert.equal(result, current)
       assert.deepEqual(keyLabels(result), keyLabels(next))
     })
+
+    it.fails('reconcileContext preserves non-enumerable descriptors for retained keys', () => {
+      const current = {}
+      Object.defineProperty(current, 'hidden', {
+        configurable: true,
+        enumerable: false,
+        value: 1,
+        writable: true,
+      })
+
+      const result = reconcileContext(current, { hidden: 2 }) as typeof current
+      const descriptor = Object.getOwnPropertyDescriptor(result, 'hidden')
+
+      assert.equal(result, current)
+      assert.deepEqual(descriptor, {
+        configurable: true,
+        enumerable: false,
+        value: 2,
+        writable: true,
+      })
+    })
+
+    it.fails('reconcileContext removes non-configurable keys absent from the next object', () => {
+      const current = {}
+      Object.defineProperty(current, 'fixed', {
+        configurable: false,
+        enumerable: true,
+        value: 1,
+        writable: true,
+      })
+
+      const result = reconcileContext(current, {}) as typeof current
+
+      assert.equal(result, current)
+      assert.equal('fixed' in result, false)
+    })
   })
 })

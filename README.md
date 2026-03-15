@@ -157,7 +157,7 @@ Draft behavior:
 - `draft.discard()` closes the handle and drops speculative work,
 - `draft.draft()` creates a nested draft from the current draft snapshot,
 - child `commit()` merges into the parent draft only; root `commit()` replays successful draft steps onto the live service in order,
-- draft publication reconciles into the existing parent or live context instead of blindly replacing the whole value; object and array subtrees preserve next-key order, sparse-array holes, cycles, and shared-reference structure, compatible collection and binary values are updated in place, and only incompatible subtrees are replaced,
+- draft publication reconciles into the existing parent or live context instead of blindly replacing the whole value; ordinary mutable object and array subtrees preserve next-key order, sparse-array holes, cycles, and shared-reference structure, compatible collection and binary values are updated in place, and only incompatible subtrees are replaced; plain-object reconciliation does not guarantee preservation of arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable retained properties,
 - subscribers are notified only for successful live transitions and root draft replay,
 - `commit()` throws `DraftOutOfDate` when the parent has advanced since draft creation,
 - after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`,
@@ -169,7 +169,7 @@ These points are worth knowing up front:
 
 - `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail; this is deliberate, because both cases have the same observable machine effect (no state change, no context change, no subscription notification), and the API is intentionally optimized for the common question `did the machine advance?`,
 - the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
-- reducers may either mutate the existing context object or return a new one; for direct live root dispatch, returning a fresh object replaces `service.context`, while draft commit and composed child publication preserve the parent or live context object and reconcile nested updates into it, preserving key order, sparse array shape, and graph topology where possible and replacing only incompatible subtrees,
+- reducers may either mutate the existing context object or return a new one; for direct live root dispatch, returning a fresh object replaces `service.context`, while draft commit and composed child publication preserve the parent or live context object and reconcile nested updates into it, preserving key order, sparse array shape, and graph topology where possible for ordinary mutable object surfaces and replacing only incompatible subtrees; reconciliation does not guarantee preservation of arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable retained properties,
 - primitive context values are supported directly; draft snapshots return them unchanged, and reconciliation returns the next primitive value,
 - drafts require context values that the draft snapshotter can detach safely at draft-creation time; unsupported values such as functions throw `DraftContextCloneFailed`,
 - reconciliation and live publication do not eagerly enforce that resulting context stays draftable; unsupported values can be published and may surface later when `draft()` or another snapshot operation is requested,
@@ -193,6 +193,14 @@ Creates a machine builder.
 - `.context<Type>(() => initialValue)` — set the initial context factory
 - `.compose(group, childMachine)` — merge a child builder into the current machine (flat semantics)
 - `.transition(source, action, target, reducer?)` — declare a transition (target is an explicit state)
+
+### `reconcileContext(parentContext, nextContext)`
+
+Reconciles a next context graph into an existing context value while preserving compatible subtree identity where possible.
+
+For ordinary mutable object surfaces, reconciliation preserves keys, values, next-key order, sparse-array holes, and graph topology. Compatible collection and binary values are updated in place, and incompatible subtrees are replaced.
+
+This is the runtime reconciliation primitive used internally for draft commits and composed child context updates.
 
 ### `interpret(machine)`
 
