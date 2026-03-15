@@ -42,9 +42,6 @@ importers:
       alien-deepsignals:
         specifier: 0.3.1
         version: 0.3.1(alien-signals@3.1.2)
-      alien-signals:
-        specifier: 3.1.2
-        version: 3.1.2
       eslint:
         specifier: 9.39.2
         version: 9.39.2(jiti@2.6.1)

@@ -333,7 +333,7 @@ const baselineReconcileBatch = createReconcileBatchRunner(
   createReconcileSlots(),
 )
 const runtimeReconcileBatch = createReconcileBatchRunner(
-  (current, next) => reconcileContext(current, next) as ReconcileTarget,
+  (current, next) => reconcileContext(current, next),
   createReconcileSlots(),
 )
 

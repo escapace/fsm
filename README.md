@@ -1,16 +1,19 @@
 # @escapace/fsm
 
-Flat extended finite state machines for event-driven application logic in TypeScript, with builder composition. A typed builder API keeps states, actions, and payloads explicit, with payload types flowing through dispatch, guards, reducers, and subscriptions. Optimistic drafts provide isolated speculative execution with explicit commit/discard.
+Flat extended finite state machines in TypeScript with a typed builder, declaration-order transition selection, and isolated drafts for speculative execution.
+It fits event-driven logic with one explicit current state, one explicit context value, and predictable dispatch rules.
 
 ## Installation
 
+Install the package and its peer dependencies:
+
 ```bash
-pnpm add @escapace/fsm
+pnpm add @escapace/fsm coastal @escapace/typelevel
 ```
 
-## Example
+## Quick start
 
-```typescript
+```ts
 import { interpret, stateMachine } from '@escapace/fsm'
 
 type Coin = 5 | 10 | 25 | 50
@@ -29,220 +32,246 @@ const machine = stateMachine()
   .state(State.Locked)
   .state(State.Unlocked)
   .initial(State.Locked)
-  .action<Action.Coin, { coin: Coin }>(Action.Coin)
+  .action<Action.Coin, { amount: Coin }>(Action.Coin)
   .action(Action.Push)
-  .context<{ total: number }>(() => ({ total: 0 }))
+  .context(() => ({ balance: 0 }))
   .transition(
     State.Locked,
-    [Action.Coin, (context, action) => context.total + action.payload.coin >= 50],
+    [Action.Coin, (context, action) => context.balance + action.payload.amount >= 50],
     State.Unlocked,
-    (context, action) => {
-      context.total += action.payload.coin
-      return context
-    },
+    (context, action) => ({ balance: context.balance + action.payload.amount - 50 }),
   )
-  .transition(State.Locked, Action.Coin, State.Locked, (context, action) => {
-    context.total += action.payload.coin
-    return context
-  })
+  .transition(State.Locked, Action.Coin, State.Locked, (context, action) => ({
+    balance: context.balance + action.payload.amount,
+  }))
   .transition(State.Unlocked, Action.Coin, State.Unlocked)
-  .transition([State.Locked, State.Unlocked], Action.Push, State.Locked, (context) => {
-    context.total = 0
-    return context
-  })
-
-const turnstile = interpret(machine)
-
-turnstile.do(Action.Coin, { coin: 25 })
-console.log(turnstile.state) // 'LOCKED'
-
-turnstile.do(Action.Coin, { coin: 25 })
-console.log(turnstile.state) // 'UNLOCKED'
-
-turnstile.do(Action.Push)
-console.log(turnstile.state) // 'LOCKED'
-```
-
-## What the library guarantees
-
-The repository treats these behaviors as the user-facing semantic contract:
-
-- states and actions must be declared before they are used,
-- candidate transitions are selected by current state and dispatched action,
-- candidate transitions are evaluated in declaration order,
-- guards are evaluated in order and stop at the first failure,
-- the first transition whose guards all pass is selected,
-- reducers run only after a transition has been selected,
-- subscribers are notified only after successful live transitions,
-- `service.draft()` captures an isolated snapshot of state and context,
-- `draft.do(...)` uses the same action validation, candidate selection, guard evaluation, and reducer semantics as service dispatch,
-- successful draft execution remains private until commit,
-- root draft commit replays successful draft steps onto the live service in order and notifies subscribers per replayed step,
-- child draft commit updates the parent draft only and does not notify subscribers,
-- source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets,
-- `.compose(group, child)` merges child states/actions/transitions into the same flat machine,
-- states must be disjoint across parent and all children; actions must be disjoint across composed siblings,
-- group names are reserved context keys for child slices only; parent context factories must not return the same keys, and transitions target explicit state identifiers.
-
-## Dispatch behavior
-
-`interpret(machine)` returns a service with:
-
-- `state` — current state
-- `context` — current context
-- `do(action, payload?)` — dispatches an action
-- `draft()` — creates an isolated draft handle
-- `subscribe(callback)` — observes successful transitions
-
-### Outcome model
-
-The public API uses return values for ordinary machine outcomes and thrown errors for invalid operations.
-
-- `do(...)` returns whether a valid dispatch selected and executed a transition,
-- builder validation throws when a machine definition is invalid,
-- undeclared actions throw instead of returning `false`, because they are outside the declared machine contract,
-- draft lifecycle operations succeed silently on valid handles and throw when the handle is closed, stale, or cannot be created from the current context.
-
-This split keeps the hot dispatch path optimized for the common question `did the machine advance?` while preserving explicit errors for invalid calls and optimistic-concurrency conflicts.
-
-### `do(action, payload?)`
-
-`do(...)` has three outcomes:
-
-- it returns `true` when a transition is selected and executed,
-- it returns `false` when no transition exists for the current state and action,
-- it returns `false` when transitions exist but all guards fail,
-- it throws when the action is not declared in the machine.
-
-Example:
-
-```typescript
-const machine = stateMachine()
-  .state('idle')
-  .state('working')
-  .initial('idle')
-  .action('start')
-  .action('stop')
-  .transition('idle', 'start', 'working')
+  .transition(State.Unlocked, Action.Push, State.Locked, () => ({ balance: 0 }))
 
 const service = interpret(machine)
 
-service.do('start') // true
-console.log(service.state) // 'working'
+service.do(Action.Coin, { amount: 25 }) // true
+console.log(service.state) // 'LOCKED'
+console.log(service.context) // { balance: 25 }
 
-service.do('stop') // false
-console.log(service.state) // 'working'
+service.do(Action.Push) // false
+console.log(service.state) // 'LOCKED'
+
+service.do(Action.Coin, { amount: 25 }) // true
+console.log(service.state) // 'UNLOCKED'
+console.log(service.context) // { balance: 0 }
 ```
+
+A machine definition declares states, actions, an initial state, an optional context factory, and transitions. `interpret(...)` turns that definition into a runnable service.
+
+## Core model
+
+A running service exposes `state`, `context`, `do(action, payload?)`, `draft()`, and `subscribe(callback)`.
+
+Standalone interpretation requires an initial state. Composition does not add runtime hierarchy; after `.compose(...)` the machine is still flat.
+
+## Outcome model
+
+Most valid operations report ordinary outcomes through return values instead of exceptions.
+
+- `service.do(...)` and `draft.do(...)` return `true` on a selected transition and `false` when a valid dispatch does not select one
+- `subscribe(...)` returns an unsubscribe function
+- `draft.commit()` and `draft.discard()` return normally on success, including an empty-trace commit
+- thrown `StateMachineError` values indicate invalid definitions, undeclared actions, unsupported draft snapshots, closed drafts, or stale draft commits
+
+A `false` dispatch always means the machine did not advance. State, context, and subscriptions remain unchanged.
+
+This split keeps no-op machine outcomes ordinary and reserves exceptions for calls that fall outside the declared machine contract or the current draft lifecycle state.
+
+## Dispatch
+
+For valid dispatches, transition selection follows one rule set:
+
+- candidates are selected by current state and dispatched action
+- candidates are tried in declaration order
+- guards inside one candidate run left to right and stop at the first `false`
+- the first candidate whose guards all pass is selected
+- only the selected candidate's reducer runs
+
+Source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets.
+
+Subscriptions observe successful live transitions only. Callbacks receive post-transition `state`, `context`, and `action`. Identical callback functions are deduplicated. The change object is reused across notifications, so retained values should be copied inside the callback.
+
+## Context correlated with state
+
+This is primarily a type-level ergonomics feature.
+
+When context is a union discriminated by `state`, guards narrow to source-state variants, reducers narrow from source state to target state, and subscription changes narrow to the transition result. In practice that removes most manual casts and turns wrong target variants into type errors.
+
+The runtime layer is smaller. It validates the initial context discriminant at `interpret(...)` time and keeps `context.state` synchronized after successful live dispatch, draft replay, and composed child updates.
+
+A PIN-input machine shows the pattern more clearly than a minimal union.
+
+```ts
+enum PinInputState {
+  Idle = 'IDLE',
+  Focused = 'FOCUSED',
+  Completed = 'COMPLETED',
+  Error = 'ERROR',
+}
+
+enum PinInputAction {
+  Focus = 'FOCUS',
+  Input = 'INPUT',
+}
+
+type PinInputContext =
+  | { state: PinInputState.Idle; focusedIndex: -1; values: string[] }
+  | { state: PinInputState.Focused; focusedIndex: number; values: string[] }
+  | { state: PinInputState.Completed; focusedIndex: number; values: string[] }
+  | {
+      state: PinInputState.Error
+      error: string
+      focusedIndex: number
+      values: string[]
+    }
+
+const machine = stateMachine()
+  .state(PinInputState.Idle)
+  .state(PinInputState.Focused)
+  .state(PinInputState.Completed)
+  .state(PinInputState.Error)
+  .initial(PinInputState.Idle)
+  .action<PinInputAction.Focus, { index: number }>(PinInputAction.Focus)
+  .action<PinInputAction.Input, { index: number; value: string }>(PinInputAction.Input)
+  .context<PinInputContext>(() => ({
+    focusedIndex: -1 as const,
+    state: PinInputState.Idle as const,
+    values: ['', '', '', ''],
+  }))
+  .transition(
+    PinInputState.Idle,
+    PinInputAction.Focus,
+    PinInputState.Focused,
+    (context, action) => ({
+      focusedIndex: action.payload.index,
+      state: PinInputState.Focused as const,
+      values: context.values,
+    }),
+  )
+  .transition(
+    PinInputState.Focused,
+    [PinInputAction.Input, (_context, action) => /^\d$/.test(action.payload.value)],
+    PinInputState.Completed,
+    (context, action) => ({
+      focusedIndex: action.payload.index,
+      state: PinInputState.Completed as const,
+      values: context.values.map((entry, index) =>
+        index === action.payload.index ? action.payload.value : entry,
+      ),
+    }),
+  )
+  .transition(
+    PinInputState.Focused,
+    [PinInputAction.Input, (_context, action) => !/^\d$/.test(action.payload.value)],
+    PinInputState.Error,
+    (context, action) => ({
+      error: `Invalid numeric input: ${action.payload.value}`,
+      focusedIndex: context.focusedIndex,
+      state: PinInputState.Error as const,
+      values: context.values,
+    }),
+  )
+```
+
+The example is abridged, but it shows the main rules:
+
+- reducer input narrows by source state and reducer output narrows by target state
+- returning the wrong variant for a target state is a type error
+- subscription changes keep `change.state`, `change.action.target`, and `change.context` aligned to the same transition result
+- `change.state` and `change.action.target` are the stable discriminators when one action can reach multiple targets
+- `interpret(...)` validates that an initial context discriminant matches the machine initial state
+- successful transitions synchronize `context.state`
+- automatic synchronization updates only the `state` discriminant field; every other field remains reducer-defined
+
+For enum-based states, the context discriminant should use enum member types rather than raw string literals.
+
+Flat object contexts and primitive contexts remain valid. When no `state` field exists, runtime state injection is skipped.
 
 ## Drafts
 
-`service.draft()` creates an isolated draft handle from the current live snapshot. `draft.do(...)` applies the same dispatch semantics as `service.do(...)`, but keeps state and context changes private until commit.
-
-```typescript
-const machine = stateMachine()
-  .state('idle')
-  .state('working')
-  .state('done')
-  .initial('idle')
-  .action('start')
-  .action('finish')
-  .context(() => ({ steps: 0 }))
-  .transition('idle', 'start', 'working', (context) => ({ steps: context.steps + 1 }))
-  .transition('working', 'finish', 'done', (context) => ({ steps: context.steps + 1 }))
-
-const service = interpret(machine)
-const draft = service.draft()
-
-draft.do('start')
-console.log(service.state) // 'idle'
-console.log(draft.state) // 'working'
-
-draft.commit()
-console.log(service.state) // 'working'
-console.log(service.context) // { steps: 1 }
-```
+`service.draft()` creates an isolated draft handle from the current live snapshot. `draft.do(...)` uses the same action validation, candidate selection, guard evaluation, and reducer semantics as live dispatch, but successful steps stay private until commit.
 
 Draft behavior:
 
-- `draft.do(action, payload?)` returns `true` on a selected transition, returns `false` on the same two failure cases as service dispatch, and throws for undeclared actions,
-- `draft.discard()` closes the handle and drops speculative work; it does not report a machine outcome and throws `DraftClosed` if the handle is no longer operational,
-- `draft.draft()` creates a nested draft from the current draft snapshot and throws `DraftClosed` when called on a closed draft or beneath a closed ancestor,
-- child `commit()` merges into the parent draft only; root `commit()` replays successful draft steps onto the live service in order,
-- `commit()` returns normally on success, including an empty-trace no-op commit, and throws `DraftOutOfDate` when the parent has advanced since draft creation,
-- draft publication reconciles into the existing parent or live context instead of blindly replacing the whole value; ordinary mutable object and array subtrees preserve next-key order, sparse-array holes, cycles, and shared-reference structure, compatible collection and binary values are updated in place, and only incompatible subtrees are replaced; plain-object reconciliation does not guarantee preservation of arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable retained properties,
-- subscribers are notified only for successful live transitions and root draft replay,
-- after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`,
-- draft creation snapshots context into detached draft data; primitives are returned unchanged, supported object graphs preserve order and topology, and unsupported values throw `DraftContextCloneFailed`.
+- `draft.do(...)` returns `true`, `false`, or throws for the same reasons as service dispatch
+- a `false` draft dispatch leaves the draft snapshot unchanged
+- draft execution never notifies subscribers before commit
+- `draft.discard()` closes the handle and drops speculative work
+- `draft.draft()` creates a nested draft from the current draft snapshot
+- child `commit()` merges into the parent draft only and reconciles into the existing parent draft context when possible
+- root `commit()` replays successful draft steps onto the live service in order and reconciles into the existing live context when possible
+- root commit notifies subscribers once per replayed step
+- empty-trace `commit()` is a no-op that still closes the draft
+- after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`
+- stale commits are rejected with `DraftOutOfDate`
+- drafts do not expose `subscribe(...)`
 
-## Known limits and non-goals
+Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, cycles, and shared references. Unsupported values such as functions fail at draft creation with `DraftContextCloneFailed`.
 
-These points are worth knowing up front:
+## Composition
 
-- `false` from `do(...)` has two meanings: either no transition exists for the current state and action, or transitions exist but all guards fail; this is deliberate, because both cases have the same observable machine effect (no state change, no context change, no subscription notification), and the API is intentionally optimized for the common question `did the machine advance?`,
-- the service type does not narrow itself to the current runtime state, so action availability is still checked at runtime,
-- reducers may either mutate the existing context object or return a new one; for direct live root dispatch, returning a fresh object replaces `service.context`, while draft commit and composed child publication preserve the parent or live context object and reconcile nested updates into it, preserving key order, sparse array shape, and graph topology where possible for ordinary mutable object surfaces and replacing only incompatible subtrees; reconciliation does not guarantee preservation of arbitrary property-descriptor semantics such as non-enumerability, accessors, or non-configurable retained properties,
-- primitive context values are supported directly; draft snapshots return them unchanged, and reconciliation returns the next primitive value,
-- drafts require context values that the draft snapshotter can detach safely at draft-creation time; unsupported values such as functions throw `DraftContextCloneFailed`,
-- reconciliation and live publication do not eagerly enforce that resulting context stays draftable; unsupported values can be published and may surface later when `draft()` or another snapshot operation is requested,
-- drafts do not expose `subscribe(...)`; the publication boundary is commit,
-- conflict detection is optimistic: stale commits are rejected with `DraftOutOfDate` rather than merged,
-- composed machines are still flat at runtime; `.compose(...)` is authoring-time structure, not runtime hierarchy,
-- group names are not states and cannot be transition targets,
-- the library models flat state machines only; it does not provide hierarchy, parallel regions, history states, or other statechart semantics.
+`.compose(group, child)` merges a child machine into the parent definition while mounting child context under `context[group]`.
 
-## API
+Composition stays flat at runtime.
 
-### `stateMachine()`
+- group names are reserved context keys only
+- group names are not states and cannot be transition targets
+- parent and child states must be disjoint
+- composed siblings cannot share action names
+- a parent and child may share an action name when payload types are compatible
+- child guards and reducers operate on the child context slice only
+- parent and sibling context slices are preserved during child updates
+- parent context factories must not define keys that collide with composed group names
+- `.context(...).compose(...)` and `.compose(...).context(...)` produce the same compound context shape
+- a child used only through composition may omit its own initial state when transitions target explicit child states
 
-Creates a machine builder.
+## `reconcileContext(...)`
 
-#### Methods
+Reducers may mutate and return the current context value or return a fresh one.
 
-- `.state(name)` — declare a state
-- `.initial(state)` — set the initial state
-- `.action<Type, Payload>(name)` — declare an action and optional payload type
-- `.context<Type>(() => initialValue)` — set the initial context factory
-- `.compose(group, childMachine)` — merge a child builder into the current machine (flat semantics)
-- `.transition(source, action, target, reducer?)` — declare a transition (target is an explicit state)
+On direct live root dispatch, a fresh reducer result becomes `service.context` directly. Draft commit and composed child updates use `reconcileContext(parentContext, nextContext)` instead. That path reconciles into the existing parent or live context graph when possible rather than blindly replacing the whole value.
 
-### `reconcileContext(parentContext, nextContext)`
+For ordinary mutable object surfaces, reconciliation preserves compatible subtree identity where possible while rebuilding the result to match the next graph. That includes next-key order, sparse-array holes, cycles, shared-reference topology, and compatible `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array instances in place.
 
-Reconciles a next context graph into an existing context value while preserving compatible subtree identity where possible.
+When either side is not object-like, reconciliation returns `nextContext`.
 
-For ordinary mutable object surfaces, reconciliation preserves keys, values, next-key order, sparse-array holes, and graph topology. Compatible collection and binary values are updated in place, and incompatible subtrees are replaced.
+Plain-object reconciliation does not preserve arbitrary property-descriptor behavior such as accessors, non-enumerability, or non-configurable retained properties. Publication also does not eagerly validate that the resulting graph stays snapshot-safe for future drafts.
 
-This is the runtime reconciliation primitive used internally for draft commits and composed child context updates.
+## Errors
 
-### `interpret(machine)`
+All thrown errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
 
-Creates an executable machine service.
+| Error                        | Raised when                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ActionExists`               | `.action(...)` declares an action that already exists in the current machine.                                                  |
+| `ActionOverlap`              | `.compose(...)` introduces an action already used by a previously composed sibling.                                            |
+| `ActionUnknown`              | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
+| `ContextFactoryRequired`     | a context initializer is not a nullary function.                                                                               |
+| `ContextFactoryStateInvalid` | the initial context has a `state` discriminant that does not match the machine initial state.                                  |
+| `ContextGroupConflict`       | a parent context factory returns an own key that collides with a composed group name.                                          |
+| `DraftClosed`                | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
+| `DraftContextCloneFailed`    | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
+| `DraftOutOfDate`             | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
+| `GroupExists`                | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
+| `NotStateMachine`            | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
+| `StateExists`                | `.state(...)` declares a state that already exists, or `.compose(...)` introduces a child state that already exists.           |
+| `StateUnknown`               | `.initial(...)` or `.transition(...)` references a state that has not been declared.                                           |
 
-#### Properties
+The package also exports `isStateMachineError(...)`, `isStateMachineErrorOfType(...)`, and `STATE_MACHINE_ERROR_TYPES`.
 
-- `.state` — current state
-- `.context` — current context
+## Limits
 
-#### Methods
+A few boundaries are deliberate:
 
-- `.do(action, payload?)` — dispatch an action
-- `.draft()` — create an isolated draft handle
-- `.subscribe(callback)` — subscribe to successful transitions
-
-### `StateMachineDraft`
-
-Represents an isolated speculative execution handle.
-
-#### Properties
-
-- `.state` — current draft state
-- `.context` — current draft context
-
-#### Methods
-
-- `.do(action, payload?)` — dispatch an action against the draft snapshot
-- `.draft()` — create a nested draft
-- `.commit()` — publish changes to the parent draft or live service
-- `.discard()` — close the draft without publishing changes
+- `false` from `do(...)` conflates two cases: no transition for `(state, action)` and matching transitions whose guards all fail
+- the service type does not narrow itself to the current runtime state; action availability remains a runtime question
+- drafts snapshot context at creation time; unsupported values fail there, not at machine definition time
+- the library stays flat at runtime and does not implement hierarchy, parallel regions, or history semantics
 
 ## Performance
 

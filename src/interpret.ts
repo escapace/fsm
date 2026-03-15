@@ -1,10 +1,10 @@
 /* eslint-disable unicorn/prevent-abbreviations */
-/* eslint-disable typescript/no-explicit-any */
 
 import type $ from '@escapace/typelevel'
 import { remove, szudzik } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { reconcileContext, snapshotContext } from './context-runtime'
+import { isObject } from './is-object'
 import { StateMachineError } from './error'
 import {
   STATE_MACHINE_STATE,
@@ -71,6 +71,7 @@ const assertDraftOperational = (draft: InternalDraftFrame): void => {
 export const interpret = <T extends StateMachineInterface>(
   stateMachine: T,
 ): StateMachineService<InferStateMachineModel<T>> => {
+  type Model = InferStateMachineModel<T>
   if (
     typeof stateMachine[STATE_MACHINE_STATE] !== 'object' ||
     stateMachine[STATE_MACHINE_STATE] === null
@@ -91,9 +92,27 @@ export const interpret = <T extends StateMachineInterface>(
       ? undefined
       : (assertContextFactory(contextFactory), contextFactory())
   let state: StateMachineIdentifier = initial!
+
+  // Whether context carries a `state` discriminant. Invariant for the machine's
+  // lifetime: if the initial context has `state`, every reducer return must too
+  // (enforced by the type system). Computed once, used on every dispatch.
+  const needsStateInjection = isObject(context) && 'state' in context
+
+  // Validate that the context factory's state discriminant matches the initial state.
+  if (needsStateInjection) {
+    const ctxState = (context as Record<string, unknown>).state
+
+    if (ctxState !== state) {
+      throw new StateMachineError({
+        actual: ctxState,
+        expected: state,
+        type: 'ContextFactoryStateInvalid',
+      })
+    }
+  }
   let indexState = indiceStates.get(state)!
   let commitCursor = 0
-  const subscriptions: StateMachineSubscription[] = []
+  const subscriptions: Array<StateMachineSubscription<Model>> = []
 
   // Pre-allocated mutable buffers for action/change dispatch — loosely typed
   // to avoid deep generic resolution on every assignment.
@@ -104,7 +123,7 @@ export const interpret = <T extends StateMachineInterface>(
     type: undefined,
   }
 
-  type Change = StateMachineChange<InferStateMachineModel<T>>
+  type Change = StateMachineChange<Model>
   const _change = {
     action: undefined,
     context: undefined,
@@ -114,7 +133,7 @@ export const interpret = <T extends StateMachineInterface>(
   const createDraft = (
     parent: InternalDraftFrame | undefined,
     baseCursor: number,
-  ): StateMachineDraft => {
+  ): StateMachineDraft<Model> => {
     const frame: InternalDraftFrame = {
       baseCursor,
       closed: false,
@@ -125,7 +144,7 @@ export const interpret = <T extends StateMachineInterface>(
       trace: [],
     }
 
-    const draft: StateMachineDraft = {
+    const draft: StateMachineDraft<Model> = {
       commit() {
         assertDraftOperational(frame)
 
@@ -151,6 +170,11 @@ export const interpret = <T extends StateMachineInterface>(
 
             if (step.reducer !== undefined) {
               context = reconcileContext(context, step.reducer(context, step.action))
+            }
+
+            // Inject state discriminant after replayed transition
+            if (needsStateInjection) {
+              ;(context as Record<string, unknown>).state = state
             }
 
             commitCursor += 1
@@ -191,13 +215,13 @@ export const interpret = <T extends StateMachineInterface>(
         frame.closed = true
       },
       get context() {
-        return frame.context
+        return frame.context as StateMachineDraft<Model>['context']
       },
       discard() {
         assertDraftOperational(frame)
         frame.closed = true
       },
-      // @ts-expect-error types
+      // @ts-expect-error runtime hot path keeps direct payload parameter shape
       do(action, payload) {
         assertDraftOperational(frame)
 
@@ -251,6 +275,11 @@ export const interpret = <T extends StateMachineInterface>(
           frame.context = transition.reducer(frame.context, actionInfo)
         }
 
+        // Inject state discriminant after transition
+        if (needsStateInjection) {
+          ;(frame.context as Record<string, unknown>).state = frame.state
+        }
+
         frame.trace.push({
           action: {
             payload,
@@ -268,18 +297,18 @@ export const interpret = <T extends StateMachineInterface>(
         return createDraft(frame, draftHeadCursor(frame))
       },
       get state() {
-        return frame.state
+        return frame.state as StateMachineDraft<Model>['state']
       },
     }
 
     return draft
   }
 
-  const instance: StateMachineService = {
+  const instance: StateMachineService<Model> = {
     get context() {
-      return context
+      return context as StateMachineService<Model>['context']
     },
-    // @ts-expect-error types
+    // @ts-expect-error runtime hot path keeps direct payload parameter shape
     do(action, payload) {
       const indexAction = indiceActions.get(action)
 
@@ -329,6 +358,11 @@ export const interpret = <T extends StateMachineInterface>(
         context = transition.reducer(context, _action)
       }
 
+      // Inject state discriminant after transition
+      if (needsStateInjection) {
+        ;(context as Record<string, unknown>).state = state
+      }
+
       commitCursor += 1
 
       // Early exit if no subscriptions to avoid object updates
@@ -345,9 +379,9 @@ export const interpret = <T extends StateMachineInterface>(
       return createDraft(undefined, commitCursor)
     },
     get state() {
-      return state
+      return state as StateMachineService<Model>['state']
     },
-    subscribe(subscription: StateMachineSubscription) {
+    subscribe(subscription: StateMachineSubscription<Model>) {
       if (!subscriptions.includes(subscription)) {
         subscriptions.push(subscription)
       }
@@ -358,6 +392,5 @@ export const interpret = <T extends StateMachineInterface>(
     },
   }
 
-  // eslint-disable-next-line typescript/no-unsafe-return
-  return instance as any
+  return instance
 }

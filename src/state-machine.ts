@@ -3,6 +3,7 @@
 import { szudzik } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { reconcileContext } from './context-runtime'
+import { isObject } from './is-object'
 import { StateMachineError } from './error'
 import { product } from './product'
 import {
@@ -160,14 +161,29 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
                       predicate(context[group], info),
                 )
 
+          const injectChildState = (context: Record<StateMachineIdentifier, unknown>) => {
+            const child = context[group]
+
+            if (isObject(child) && 'state' in child) {
+              ;(child as Record<string, unknown>).state = transition.target
+            }
+          }
+
           const reducer =
             transition.reducer === undefined
-              ? undefined
+              ? // No child reducer, but still need to inject child state discriminant
+                (context: Record<StateMachineIdentifier, unknown>) => {
+                  injectChildState(context)
+
+                  return context
+                }
               : (context: Record<StateMachineIdentifier, unknown>, info: unknown) => {
                   context[group] = reconcileContext(
                     context[group],
                     transition.reducer!(context[group], info),
                   )
+
+                  injectChildState(context)
 
                   return context
                 }

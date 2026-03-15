@@ -1,15 +1,12 @@
 {
   "name": "@escapace/fsm",
-  "description": "Flat extended finite state machines for event-driven application logic in TypeScript.",
+  "description": "Flat extended finite state machines in TypeScript with a typed builder, declaration-order transition selection, and isolated drafts for speculative execution.",
   "version": "0.0.0",
   "author": {
     "name": "escapace",
     "email": "opensource@escapace.com"
   },
   "bugs": "https://github.com/escapace/fsm/issues",
-  "dependencies": {
-    "es-toolkit": "^1.45.0"
-  },
   "devDependencies": {
     "@commitlint/cli": "20.4.3",
     "@commitlint/config-conventional": "20.4.3",
@@ -19,7 +16,6 @@
     "@vitest/coverage-v8": "4.0.18",
     "@xstate/fsm": "2.1.0",
     "alien-deepsignals": "0.3.1",
-    "alien-signals": "3.1.2",
     "eslint": "9.39.2",
     "eslint-config-escapace": "5.13.0",
     "esroll": "1.1.5",
@@ -51,7 +47,8 @@
   "module": "lib/neutral/index.js",
   "peerDependencies": {
     "@escapace/typelevel": "^2.0.3",
-    "coastal": "^0.2.1"
+    "coastal": "^0.2.1",
+    "es-toolkit": "^1.45.0"
   },
   "private": false,
   "publishConfig": {

@@ -36,6 +36,48 @@ interface ChildContext {
   remove?: number
 }
 
+interface ReactiveDiscriminatedIdleContext {
+  list: number[]
+  nested: {
+    count: number
+  }
+  state: 'Idle'
+}
+
+interface ReactiveDiscriminatedDoneContext {
+  done: true
+  list: number[]
+  nested: {
+    count: number
+  }
+  state: 'Done'
+}
+
+type ReactiveDiscriminatedRootContext =
+  | ReactiveDiscriminatedDoneContext
+  | ReactiveDiscriminatedIdleContext
+
+interface ReactiveDiscriminatedChildAContext {
+  list: number[]
+  nested: {
+    count: number
+  }
+  state: 'ChildA'
+}
+
+interface ReactiveDiscriminatedChildBContext {
+  list: number[]
+  nested: {
+    count: number
+  }
+  state: 'ChildB'
+  value: number
+}
+
+type ReactiveDiscriminatedChildContext =
+  | ReactiveDiscriminatedChildAContext
+  | ReactiveDiscriminatedChildBContext
+
 const toPlain = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map((entry) => toPlain(entry))
@@ -219,6 +261,55 @@ const createNestedComposedMachine = (createLive: ReactiveContextCase['createLive
     .action('ENTER_MIDDLE')
     .context(() => ({ rootKeep: 1 }))
     .transition('RootIdle', 'ENTER_MIDDLE', 'MiddleIdle')
+}
+
+const createDiscriminatedRootMachine = (createLive: ReactiveContextCase['createLive']) =>
+  stateMachine()
+    .state('Idle')
+    .state('Done')
+    .initial('Idle')
+    .action('STEP')
+    .context<ReactiveDiscriminatedRootContext>(() =>
+      createLive<ReactiveDiscriminatedIdleContext>({
+        list: [1],
+        nested: { count: 0 },
+        state: 'Idle',
+      }),
+    )
+    .transition('Idle', 'STEP', 'Done', (context: ReactiveDiscriminatedIdleContext) => ({
+      done: true,
+      list: [...context.list, 2],
+      nested: { count: context.nested.count + 1 },
+      state: 'Done' as const,
+    }))
+
+const createDiscriminatedComposedMachine = (createLive: ReactiveContextCase['createLive']) => {
+  const child = stateMachine()
+    .state('ChildA')
+    .state('ChildB')
+    .initial('ChildA')
+    .action('STEP')
+    .context<ReactiveDiscriminatedChildContext>(() =>
+      createLive<ReactiveDiscriminatedChildAContext>({
+        list: [1],
+        nested: { count: 0 },
+        state: 'ChildA',
+      }),
+    )
+    .transition('ChildA', 'STEP', 'ChildB', (context: ReactiveDiscriminatedChildAContext) => ({
+      list: [...context.list, 2],
+      nested: { count: context.nested.count + 1 },
+      state: 'ChildB' as const,
+      value: 2,
+    }))
+
+  return stateMachine()
+    .state('Idle')
+    .compose('child', child)
+    .initial('Idle')
+    .action('ENTER')
+    .context(() => ({ parent: 41 }))
+    .transition('Idle', 'ENTER', 'ChildA')
 }
 
 const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
@@ -452,6 +543,97 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
       rootKeep: 1,
     })
     assert.equal('remove' in service.context.middle.leaf, false)
+  })
+
+  it('keeps discriminated-union root context aligned through reactive draft commit', () => {
+    const service = interpret(createDiscriminatedRootMachine(testCase.createLive))
+    const rootReference = service.context
+    const nestedReference = rootReference.nested
+    const listReference = rootReference.list
+    const seen: Array<{ contextState: string; state: string }> = []
+
+    service.subscribe((change) => {
+      seen.push({
+        contextState: (change.context as { state: string }).state,
+        state: String(change.state),
+      })
+    })
+
+    testCase.verifyLiveValue?.(rootReference)
+    assert.equal(service.state, 'Idle')
+    assert.equal(service.context.state, 'Idle')
+
+    const draft = service.draft()
+    const draftContext = draft.context
+
+    assert.notEqual(draftContext, rootReference)
+    assert.notEqual(draftContext.nested, nestedReference)
+    assert.notEqual(draftContext.list, listReference)
+    testCase.verifyDraftSnapshot?.(draftContext)
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(draft.state, 'Done')
+    assert.equal(draft.context.state, 'Done')
+    assert.equal(service.state, 'Idle')
+    assert.equal(service.context.state, 'Idle')
+
+    draft.commit()
+
+    assert.equal(service.state, 'Done')
+    assert.equal(service.context.state, 'Done')
+    assert.equal(service.context, rootReference)
+    assert.equal(service.context.nested, nestedReference)
+    assert.equal(service.context.list, listReference)
+    testCase.verifyLiveValue?.(service.context)
+    assert.deepEqual(toPlain(service.context), {
+      done: true,
+      list: [1, 2],
+      nested: { count: 1 },
+      state: 'Done',
+    })
+    assert.deepEqual(seen, [{ contextState: 'Done', state: 'Done' }])
+  })
+
+  it('keeps discriminated-union child context aligned on reactive composed dispatch', () => {
+    const service = interpret(createDiscriminatedComposedMachine(testCase.createLive))
+
+    assert.equal(service.do('ENTER'), true)
+    assert.equal(service.state, 'ChildA')
+    assert.equal(service.context.child.state, 'ChildA')
+
+    const rootReference = service.context
+    const childReference = rootReference.child
+    const childNestedReference = childReference.nested
+    const childListReference = childReference.list
+    const seen: Array<{ childState: string; state: string }> = []
+
+    service.subscribe((change) => {
+      seen.push({
+        childState: (change.context as { child: { state: string } }).child.state,
+        state: String(change.state),
+      })
+    })
+
+    testCase.verifyLiveValue?.(childReference)
+
+    assert.equal(service.do('STEP'), true)
+    assert.equal(service.state, 'ChildB')
+    assert.equal(service.context, rootReference)
+    assert.equal(service.context.child, childReference)
+    assert.equal(service.context.child.state, 'ChildB')
+    assert.equal(service.context.child.nested, childNestedReference)
+    assert.equal(service.context.child.list, childListReference)
+    testCase.verifyLiveValue?.(service.context.child)
+    assert.deepEqual(toPlain(service.context), {
+      child: {
+        list: [1, 2],
+        nested: { count: 1 },
+        state: 'ChildB',
+        value: 2,
+      },
+      parent: 41,
+    })
+    assert.deepEqual(seen, [{ childState: 'ChildB', state: 'ChildB' }])
   })
 }
 

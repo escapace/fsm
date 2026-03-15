@@ -264,7 +264,7 @@ const runObjectSurfaceContract = (testCase: ObjectSurfaceCase) => {
       const candidateEntries = shuffle(entries, random)
       const current = testCase.createLive(buildObjectFromStringEntries(entries))
       const next = buildObjectFromStringEntries(candidateEntries)
-      const result = reconcileContext(current, next) as Record<string, unknown>
+      const result = reconcileContext(current, next)
 
       assert.equal(result, current)
       assert.deepEqual(
@@ -461,7 +461,7 @@ describe('context runtime direct contracts', () => {
       }
       next.self = next
 
-      const result = reconcileContext(current, next) as SelfReferentialRoot
+      const result = reconcileContext(current, next)
 
       assert.equal(result, current)
       assert.equal(result.self, result)
@@ -591,7 +591,7 @@ describe('context runtime direct contracts', () => {
         [first, 'first'],
       ])
 
-      const result = reconcileContext(current, next) as typeof current
+      const result = reconcileContext(current, next)
 
       assert.equal(result, current)
       assert.deepEqual(keyLabels(result), keyLabels(next))

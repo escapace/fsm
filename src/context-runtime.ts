@@ -1,13 +1,11 @@
 import { isArrayBuffer, isDate, isMap, isSet, isTypedArray } from 'es-toolkit'
 import { StateMachineError } from './error'
+import { isObject } from './is-object'
 
 interface ReconcileState {
   currentToNext: WeakMap<object, object>
   nextToResult: WeakMap<object, object>
 }
-
-const isObjectLikeValue = (value: unknown): value is object =>
-  typeof value === 'object' && value !== null
 
 const isDataView = (value: unknown): value is DataView => value instanceof DataView
 
@@ -25,7 +23,7 @@ const snapshotValue = (value: unknown, seen: WeakMap<object, unknown>): unknown 
     throw new TypeError('Failed to snapshot context value.')
   }
 
-  if (!isObjectLikeValue(value)) {
+  if (!isObject(value)) {
     return value
   }
 
@@ -114,7 +112,7 @@ const reconcileValue = (
     return currentValue
   }
 
-  if (!isObjectLikeValue(currentValue) || !isObjectLikeValue(nextValue)) {
+  if (!isObject(currentValue) || !isObject(nextValue)) {
     return nextValue
   }
 
@@ -281,11 +279,14 @@ const normalizeSnapshotError = (error: unknown): StateMachineError =>
     type: 'DraftContextCloneFailed',
   })
 
-export const reconcileContext = (parentContext: unknown, nextContext: unknown): unknown =>
-  reconcileValue(parentContext, nextContext, {
+export function reconcileContext<T extends object>(parentContext: object, nextContext: T): T
+export function reconcileContext<T>(parentContext: unknown, nextContext: T): T
+export function reconcileContext(parentContext: unknown, nextContext: unknown): unknown {
+  return reconcileValue(parentContext, nextContext, {
     currentToNext: new WeakMap(),
     nextToResult: new WeakMap(),
   })
+}
 
 /**
  * Creates a detached snapshot of a context value for draft execution.

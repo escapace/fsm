@@ -13,8 +13,8 @@ import {
   PinInputState,
   createPinInput,
   createPinInputMachine,
-} from './pin-input'
-import { interpret } from '../src/index'
+} from '../../examples/pin-input'
+import { interpret } from '../index'
 
 describe('Pin Input State Machine', () => {
   const defaultConfig: PinInputConfig = {
