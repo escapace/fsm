@@ -104,8 +104,6 @@ When context is a union discriminated by `state`, guards narrow to source-state 
 
 The runtime layer is smaller. It validates the initial context discriminant at `interpret(...)` time and keeps `context.state` synchronized after successful live dispatch, draft replay, and composed child updates.
 
-A PIN-input machine shows the pattern more clearly than a minimal union.
-
 ```ts
 enum PinInputState {
   Idle = 'IDLE',
