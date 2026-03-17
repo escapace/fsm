@@ -110,6 +110,28 @@ describe('compose type-level', () => {
     unsubscribe()
   })
 
+  it('draft.subscribe callback exposes composed change types', () => {
+    const service = interpret(composed)
+    const draft = service.draft()
+
+    const unsubscribe = draft.subscribe((change) => {
+      interface ExpectedContext {
+        readonly power: { toggles: number }
+        readonly starts: number
+      }
+
+      check<Equal<typeof change.context, ExpectedContext>>()
+      check<Equal<typeof change.state, 'Idle' | 'Off' | 'On'>>()
+      check<Equal<typeof change.action.type, 'Start' | 'Toggle'>>()
+      check<Equal<typeof change.action.source, 'Idle' | 'Off' | 'On'>>()
+      check<Equal<typeof change.action.target, 'Idle' | 'Off' | 'On'>>()
+      check<Equal<typeof change.action.payload, never>>()
+    })
+
+    check<Equal<typeof unsubscribe, () => void>>()
+    unsubscribe()
+  })
+
   it('parent guard sees composed context and parent action type', () => {
     const machine = stateMachine()
       .state('Idle')

@@ -179,6 +179,214 @@ describe('draft runtime semantics', () => {
     assert.deepEqual(events[1], { source: 'B', state: 'C', target: 'C', ticks: 2 })
   })
 
+  it('draft.subscribe(...) receives local notifications and service stays silent before root commit', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
+      .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
+
+    const service = interpret(machine)
+    const serviceStates: string[] = []
+    const draftStates: string[] = []
+
+    service.subscribe((change) => {
+      serviceStates.push(String(change.state))
+    })
+
+    const draft = service.draft()
+    draft.subscribe((change) => {
+      draftStates.push(String(change.state))
+    })
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(draft.do('STEP'), true)
+
+    assert.deepEqual(draftStates, ['B', 'C'])
+    assert.deepEqual(serviceStates, [])
+
+    draft.commit()
+
+    assert.deepEqual(serviceStates, ['B', 'C'])
+  })
+
+  it('child commit publishes to parent subscribers with stepwise parent-visible state', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .state('D')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
+      .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
+      .transition('C', 'STEP', 'D', (context) => ({ count: context.count + 1 }))
+
+    const service = interpret(machine)
+    const parent = service.draft()
+
+    assert.equal(parent.do('STEP'), true)
+
+    const child = parent.draft()
+    assert.equal(child.do('STEP'), true)
+    assert.equal(child.do('STEP'), true)
+
+    const snapshots: Array<{ contextCount: number; eventCount: number; state: string }> = []
+
+    parent.subscribe((change) => {
+      snapshots.push({
+        contextCount: parent.context.count,
+        eventCount: change.context.count,
+        state: String(parent.state),
+      })
+    })
+
+    child.commit()
+
+    assert.deepEqual(snapshots, [
+      { contextCount: 2, eventCount: 2, state: 'C' },
+      { contextCount: 3, eventCount: 3, state: 'D' },
+    ])
+  })
+
+  it('grandchild commit publishes to child only, not parent or service', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .state('D')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
+      .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
+      .transition('C', 'STEP', 'D', (context) => ({ count: context.count + 1 }))
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+    const grandchild = child.draft()
+
+    const childSeen: string[] = []
+    const parentSeen: string[] = []
+    const serviceSeen: string[] = []
+
+    child.subscribe((change) => {
+      childSeen.push(String(change.state))
+    })
+
+    parent.subscribe((change) => {
+      parentSeen.push(String(change.state))
+    })
+
+    service.subscribe((change) => {
+      serviceSeen.push(String(change.state))
+    })
+
+    assert.equal(grandchild.do('STEP'), true)
+    assert.equal(grandchild.do('STEP'), true)
+
+    assert.deepEqual(childSeen, [])
+    assert.deepEqual(parentSeen, [])
+    assert.deepEqual(serviceSeen, [])
+
+    grandchild.commit()
+
+    assert.deepEqual(childSeen, ['B', 'C'])
+    assert.deepEqual(parentSeen, [])
+    assert.deepEqual(serviceSeen, [])
+  })
+
+  it('parent subscriber can create and commit a parent draft during child publication replay', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    assert.equal(child.do('STEP'), true)
+
+    let nestedCommitError: unknown
+
+    parent.subscribe(() => {
+      try {
+        const nested = parent.draft()
+        nested.commit()
+      } catch (error) {
+        nestedCommitError = error
+      }
+    })
+
+    child.commit()
+
+    assert.equal(nestedCommitError, undefined)
+  })
+
+  it('draft subscribe deduplicates identical handlers and unsubscribe is safe after close', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    let calls = 0
+    const subscriber = () => {
+      calls += 1
+    }
+
+    const unsubscribeA = draft.subscribe(subscriber)
+    const unsubscribeB = draft.subscribe(subscriber)
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(calls, 1)
+
+    draft.discard()
+
+    unsubscribeA()
+    unsubscribeB()
+  })
+
+  it('retained child unsubscribe does not keep child operational after ancestor close', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    let seen = 0
+    const unsubscribe = child.subscribe(() => {
+      seen += 1
+    })
+
+    parent.discard()
+
+    assertErrorType(() => child.do('STEP'), 'DraftClosed')
+
+    unsubscribe()
+    unsubscribe()
+
+    assert.equal(seen, 0)
+  })
+
   it('discard closes handle and drops draft changes', () => {
     const machine = stateMachine()
       .state('A')
@@ -274,6 +482,29 @@ describe('draft runtime semantics', () => {
     assertErrorType(() => child.commit(), 'DraftClosed')
     assertErrorType(() => child.discard(), 'DraftClosed')
     assertErrorType(() => child.draft(), 'DraftClosed')
+    assertErrorType(() => child.subscribe(() => undefined), 'DraftClosed')
+  })
+
+  it('ancestor commit closes descendants recursively', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+    const grandchild = child.draft()
+
+    assert.equal(parent.do('STEP'), true)
+    parent.commit()
+
+    assertErrorType(() => child.do('STEP'), 'DraftClosed')
+    assertErrorType(() => child.subscribe(() => undefined), 'DraftClosed')
+    assertErrorType(() => grandchild.do('STEP'), 'DraftClosed')
+    assertErrorType(() => grandchild.subscribe(() => undefined), 'DraftClosed')
   })
 
   it('empty-trace root commit is a no-op and closes handle', () => {
@@ -343,6 +574,64 @@ describe('draft runtime semantics', () => {
 
     assert.equal(guard.mock.calls.length, 1)
     assert.equal(service.state, 'B')
+  })
+
+  it('commit replay does not evaluate guards that would throw on re-run', () => {
+    const failure = new Error('guard-should-not-rerun')
+    const guard = vi.fn(() => {
+      if (guard.mock.calls.length > 1) {
+        throw failure
+      }
+
+      return true
+    })
+
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', ['STEP', guard], 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(guard.mock.calls.length, 1)
+
+    draft.commit()
+
+    assert.equal(guard.mock.calls.length, 1)
+    assert.equal(service.state, 'B')
+  })
+
+  it('nested publication re-runs reducers at each commit boundary', () => {
+    const reducer = vi.fn((context: { count: number }) => ({ count: context.count + 1 }))
+
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'B', reducer)
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+    const grandchild = child.draft()
+
+    assert.equal(grandchild.do('STEP'), true)
+    assert.equal(reducer.mock.calls.length, 1)
+
+    grandchild.commit()
+    assert.equal(reducer.mock.calls.length, 2)
+
+    child.commit()
+    assert.equal(reducer.mock.calls.length, 3)
+
+    parent.commit()
+    assert.equal(reducer.mock.calls.length, 4)
   })
 
   it('context materialization preserves parent object identity on commit', () => {

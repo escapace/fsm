@@ -175,4 +175,86 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
     assertErrorType(() => child.commit(), 'DraftClosed')
     assertErrorType(() => child.discard(), 'DraftClosed')
   })
+
+  it('P21: child commit publishes ordered changes to immediate parent subscribers only', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .state('D')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ n: 0 }))
+      .transition('A', 'STEP', 'B', (context) => ({ n: context.n + 1 }))
+      .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
+      .transition('C', 'STEP', 'D', (context) => ({ n: context.n + 1 }))
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    child.do('STEP')
+    child.do('STEP')
+
+    const parentSeen: string[] = []
+    const serviceSeen: string[] = []
+
+    parent.subscribe((change) => {
+      parentSeen.push(String(change.state))
+    })
+
+    service.subscribe((change) => {
+      serviceSeen.push(String(change.state))
+    })
+
+    child.commit()
+
+    assert.deepEqual(parentSeen, ['B', 'C'])
+    assert.deepEqual(serviceSeen, [])
+  })
+
+  it('P22: publication is one boundary at a time in nested drafts', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+    const grandchild = child.draft()
+
+    grandchild.do('STEP')
+
+    const parentSeen: string[] = []
+    const childSeen: string[] = []
+    const serviceSeen: string[] = []
+
+    parent.subscribe((change) => {
+      parentSeen.push(String(change.state))
+    })
+
+    child.subscribe((change) => {
+      childSeen.push(String(change.state))
+    })
+
+    service.subscribe((change) => {
+      serviceSeen.push(String(change.state))
+    })
+
+    grandchild.commit()
+
+    assert.deepEqual(childSeen, ['B'])
+    assert.deepEqual(parentSeen, [])
+    assert.deepEqual(serviceSeen, [])
+
+    child.commit()
+
+    assert.deepEqual(parentSeen, ['B'])
+    assert.deepEqual(serviceSeen, [])
+  })
 })

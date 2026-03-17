@@ -77,10 +77,11 @@ Most valid operations report ordinary outcomes through return values instead of 
 - `subscribe(...)` returns an unsubscribe function
 - `draft.commit()` and `draft.discard()` return normally on success, including an empty-trace commit
 - thrown `StateMachineError` values indicate invalid definitions, undeclared actions, unsupported draft snapshots, closed drafts, or stale draft commits
+- exceptions thrown by user guards or reducers are propagated as-is (they are not wrapped as `StateMachineError`)
 
 A `false` dispatch always means the machine did not advance. State, context, and subscriptions remain unchanged.
 
-This split keeps no-op machine outcomes ordinary and reserves exceptions for calls that fall outside the declared machine contract or the current draft lifecycle state.
+This split keeps no-op machine outcomes ordinary and keeps control-flow errors explicit: contract/lifecycle errors use `StateMachineError`, while user guard/reducer exceptions propagate unchanged.
 
 ## Dispatch
 
@@ -95,6 +96,8 @@ For valid dispatches, transition selection follows one rule set:
 Source and target arrays in `.transition(...)` expand as the Cartesian product of sources and targets.
 
 Subscriptions observe successful live transitions only. Callbacks receive post-transition `state`, `context`, and `action`. Identical callback functions are deduplicated. The change object is reused across notifications, so retained values should be copied inside the callback.
+
+If a guard or reducer throws, the failing step is not published and does not advance machine state for that step. However, side effects inside user guard/reducer code are not rolled back.
 
 ## Context correlated with state
 
@@ -198,16 +201,18 @@ Draft behavior:
 
 - `draft.do(...)` returns `true`, `false`, or throws for the same reasons as service dispatch
 - a `false` draft dispatch leaves the draft snapshot unchanged
-- draft execution never notifies subscribers before commit
+- drafts expose `draft.subscribe(...)`; successful local `draft.do(...)` calls notify only that draft
 - `draft.discard()` closes the handle and drops speculative work
 - `draft.draft()` creates a nested draft from the current draft snapshot
-- child `commit()` merges into the parent draft only and reconciles into the existing parent draft context when possible
-- root `commit()` replays successful draft steps onto the live service in order and reconciles into the existing live context when possible
-- root commit notifies subscribers once per replayed step
+- child `commit()` publishes to the immediate parent draft in replay order and notifies parent draft subscribers once per published step
+- nested publication is one boundary at a time; a child commit does not notify grandparent drafts or the service directly
+- root `commit()` publishes to the live service in replay order and notifies service subscribers once per replayed step
+- during commit replay, the receiving runtime (`parent` draft or service) is advanced step by step before each callback
+- reducer functions execute again at each publication boundary (`do(...)` and each upward `commit()` replay)
 - empty-trace `commit()` is a no-op that still closes the draft
 - after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`
+- commit and discard close the draft observation channel and recursively release descendant draft subscriptions
 - stale commits are rejected with `DraftOutOfDate`
-- drafts do not expose `subscribe(...)`
 
 Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, cycles, and shared references. Unsupported values such as functions fail at draft creation with `DraftContextCloneFailed`.
 

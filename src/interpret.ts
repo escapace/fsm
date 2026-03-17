@@ -38,13 +38,17 @@ interface InternalSelectedStep {
   reducer: InternalReducer
 }
 
+type InternalSubscription = (change: unknown) => void
+
 interface InternalDraftFrame {
   baseCursor: number
+  children: Set<InternalDraftFrame> | undefined
   closed: boolean
   context: unknown
   indexState: number
   parent: InternalDraftFrame | undefined
   state: StateMachineIdentifier
+  subscriptions: InternalSubscription[] | undefined
   trace: InternalSelectedStep[]
 }
 
@@ -60,6 +64,84 @@ const assertDraftOperational = (draft: InternalDraftFrame): void => {
 
     cursor = cursor.parent
   }
+}
+
+const notifySubscribers = (
+  subscriptions: InternalSubscription[] | undefined,
+  change: unknown,
+): void => {
+  if (subscriptions === undefined) {
+    return
+  }
+
+  for (let index = 0; index < subscriptions.length; index++) {
+    subscriptions[index](change)
+  }
+}
+
+const closeDraftFrame = (draft: InternalDraftFrame): void => {
+  /* v8 ignore start -- defensive idempotence guard for internal close recursion */
+  if (draft.closed) return
+  /* v8 ignore stop */
+
+  draft.closed = true
+
+  const children = draft.children
+  draft.children = undefined
+
+  if (children !== undefined) {
+    for (const child of children) {
+      closeDraftFrame(child)
+    }
+
+    children.clear()
+  }
+
+  if (draft.subscriptions !== undefined) {
+    draft.subscriptions.length = 0
+    draft.subscriptions = undefined
+  }
+
+  draft.trace.length = 0
+
+  const parent = draft.parent
+
+  if (parent?.children !== undefined) {
+    parent.children.delete(draft)
+
+    if (parent.children.size === 0) {
+      parent.children = undefined
+    }
+  }
+
+  draft.parent = undefined
+}
+
+const registerSubscription = <T>(
+  subscriptions: T[],
+  subscription: T,
+  onEmpty?: () => void,
+): (() => void) => {
+  if (!subscriptions.includes(subscription)) {
+    subscriptions.push(subscription)
+  }
+
+  return () => {
+    remove(subscriptions, (value) => value === subscription)
+
+    if (subscriptions.length === 0) {
+      onEmpty?.()
+    }
+  }
+}
+
+const subscribeDraft = (
+  draft: InternalDraftFrame,
+  subscription: InternalSubscription,
+): (() => void) => {
+  const subscriptions = draft.subscriptions ?? (draft.subscriptions = [])
+
+  return registerSubscription(subscriptions, subscription)
 }
 
 /**
@@ -136,12 +218,18 @@ export const interpret = <T extends StateMachineInterface>(
   ): StateMachineDraft<Model> => {
     const frame: InternalDraftFrame = {
       baseCursor,
+      children: undefined,
       closed: false,
       context: snapshotContext(parent === undefined ? context : parent.context),
       indexState: parent === undefined ? indexState : parent.indexState,
       parent,
       state: parent === undefined ? state : parent.state,
+      subscriptions: undefined,
       trace: [],
+    }
+
+    if (parent !== undefined) {
+      ;(parent.children ?? (parent.children = new Set())).add(frame)
     }
 
     const draft: StateMachineDraft<Model> = {
@@ -158,19 +246,20 @@ export const interpret = <T extends StateMachineInterface>(
           }
 
           if (frame.trace.length === 0) {
-            frame.closed = true
+            closeDraftFrame(frame)
             return
           }
 
           for (let i = 0; i < frame.trace.length; i++) {
             const step = frame.trace[i]
-
-            state = step.action.target
-            indexState = indiceStates.get(state)!
+            const nextState = step.action.target
 
             if (step.reducer !== undefined) {
               context = reconcileContext(context, step.reducer(context, step.action))
             }
+
+            state = nextState
+            indexState = indiceStates.get(state)!
 
             // Inject state discriminant after replayed transition
             if (needsStateInjection) {
@@ -188,11 +277,12 @@ export const interpret = <T extends StateMachineInterface>(
             }
           }
 
-          frame.closed = true
+          closeDraftFrame(frame)
           return
         }
 
-        const parentHead = draftHeadCursor(frame.parent)
+        const parent = frame.parent
+        const parentHead = draftHeadCursor(parent)
 
         if (parentHead !== frame.baseCursor) {
           throw new StateMachineError({
@@ -203,23 +293,51 @@ export const interpret = <T extends StateMachineInterface>(
         }
 
         if (frame.trace.length === 0) {
-          frame.closed = true
+          closeDraftFrame(frame)
           return
         }
 
-        frame.parent.trace.push(...frame.trace)
-        frame.parent.state = frame.state
-        frame.parent.indexState = frame.indexState
-        frame.parent.context = reconcileContext(frame.parent.context, frame.context)
+        const _parentChange = {
+          action: undefined,
+          context: undefined,
+          state: undefined,
+        } as unknown as Change
 
-        frame.closed = true
+        for (let i = 0; i < frame.trace.length; i++) {
+          const step = frame.trace[i]
+          const nextState = step.action.target
+
+          if (step.reducer !== undefined) {
+            parent.context = reconcileContext(
+              parent.context,
+              step.reducer(parent.context, step.action),
+            )
+          }
+
+          parent.state = nextState
+          parent.indexState = indiceStates.get(parent.state)!
+
+          if (needsStateInjection) {
+            ;(parent.context as Record<string, unknown>).state = parent.state
+          }
+
+          parent.trace.push(step)
+
+          _parentChange.action = step.action as (typeof _parentChange)['action']
+          _parentChange.context = parent.context as (typeof _parentChange)['context']
+          _parentChange.state = parent.state as (typeof _parentChange)['state']
+
+          notifySubscribers(parent.subscriptions, _parentChange)
+        }
+
+        closeDraftFrame(frame)
       },
       get context() {
         return frame.context as StateMachineDraft<Model>['context']
       },
       discard() {
         assertDraftOperational(frame)
-        frame.closed = true
+        closeDraftFrame(frame)
       },
       // @ts-expect-error runtime hot path keeps direct payload parameter shape
       do(action, payload) {
@@ -268,19 +386,21 @@ export const interpret = <T extends StateMachineInterface>(
           return false
         }
 
-        frame.state = transition.target
-        frame.indexState = indiceStates.get(frame.state)!
+        const nextState = transition.target
 
         if (transition.reducer !== undefined) {
           frame.context = transition.reducer(frame.context, actionInfo)
         }
+
+        frame.state = nextState
+        frame.indexState = indiceStates.get(frame.state)!
 
         // Inject state discriminant after transition
         if (needsStateInjection) {
           ;(frame.context as Record<string, unknown>).state = frame.state
         }
 
-        frame.trace.push({
+        const selectedStep: InternalSelectedStep = {
           action: {
             payload,
             source: actionInfo.source!,
@@ -288,7 +408,17 @@ export const interpret = <T extends StateMachineInterface>(
             type: action,
           },
           reducer: transition.reducer,
-        })
+        }
+
+        frame.trace.push(selectedStep)
+
+        const _draftChange = {
+          action: selectedStep.action,
+          context: frame.context,
+          state: frame.state,
+        } as unknown as Change
+
+        notifySubscribers(frame.subscriptions, _draftChange)
 
         return true
       },
@@ -298,6 +428,10 @@ export const interpret = <T extends StateMachineInterface>(
       },
       get state() {
         return frame.state as StateMachineDraft<Model>['state']
+      },
+      subscribe(subscription: StateMachineSubscription<Model>) {
+        assertDraftOperational(frame)
+        return subscribeDraft(frame, subscription as InternalSubscription)
       },
     }
 
@@ -351,12 +485,14 @@ export const interpret = <T extends StateMachineInterface>(
         return false
       }
 
-      state = transition.target
-      indexState = indiceStates.get(state)!
+      const nextState = transition.target
 
       if (transition.reducer !== undefined) {
         context = transition.reducer(context, _action)
       }
+
+      state = nextState
+      indexState = indiceStates.get(state)!
 
       // Inject state discriminant after transition
       if (needsStateInjection) {
@@ -382,13 +518,7 @@ export const interpret = <T extends StateMachineInterface>(
       return state as StateMachineService<Model>['state']
     },
     subscribe(subscription: StateMachineSubscription<Model>) {
-      if (!subscriptions.includes(subscription)) {
-        subscriptions.push(subscription)
-      }
-
-      return () => {
-        remove(subscriptions, (value) => value === subscription)
-      }
+      return registerSubscription(subscriptions, subscription)
     },
   }
 

@@ -373,6 +373,7 @@ export interface StateMachineDraft<
   commit: () => void
   discard: () => void
   draft: () => StateMachineDraft<T>
+  subscribe: (subscription: StateMachineSubscription<T>) => () => void
 }
 
 export interface StateMachineService<
