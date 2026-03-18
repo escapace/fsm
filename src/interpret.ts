@@ -10,6 +10,7 @@ import {
   STATE_MACHINE_STATE,
   type InferStateMachineModel,
   type StateMachineChange,
+  type StateMachineInterpretOptions,
   type StateMachineDraft,
   type StateMachineIdentifier,
   type StateMachineInterface,
@@ -152,6 +153,7 @@ const subscribeDraft = (
  */
 export const interpret = <T extends StateMachineInterface>(
   stateMachine: T,
+  options?: StateMachineInterpretOptions<T>,
 ): StateMachineService<InferStateMachineModel<T>> => {
   type Model = InferStateMachineModel<T>
   if (
@@ -169,18 +171,45 @@ export const interpret = <T extends StateMachineInterface>(
     transitions: transitionMap,
   } = stateMachine[STATE_MACHINE_STATE]
 
-  let context: unknown =
-    contextFactory === undefined
-      ? undefined
-      : (assertContextFactory(contextFactory), contextFactory())
-  let state: StateMachineIdentifier = initial!
+  const hydrate =
+    isObject(options) && Object.hasOwn(options, 'hydrate')
+      ? (options as { hydrate?: unknown }).hydrate
+      : undefined
+
+  let context: unknown
+  let state: StateMachineIdentifier
+
+  if (hydrate !== undefined) {
+    if (
+      !isObject(hydrate) ||
+      !Object.hasOwn(hydrate, 'state') ||
+      !Object.hasOwn(hydrate, 'context')
+    ) {
+      throw new StateMachineError({ type: 'HydrationMalformed' })
+    }
+
+    context = (hydrate as { context: unknown }).context
+    state = (hydrate as { state: StateMachineIdentifier }).state
+  } else {
+    context =
+      contextFactory === undefined
+        ? undefined
+        : (assertContextFactory(contextFactory), contextFactory())
+    state = initial!
+  }
+
+  const hydratedIndexState = indiceStates.get(state)
+
+  if (hydratedIndexState === undefined) {
+    throw new StateMachineError({ identifier: state, type: 'StateUnknown' })
+  }
 
   // Whether context carries a `state` discriminant. Invariant for the machine's
   // lifetime: if the initial context has `state`, every reducer return must too
   // (enforced by the type system). Computed once, used on every dispatch.
   const needsStateInjection = isObject(context) && 'state' in context
 
-  // Validate that the context factory's state discriminant matches the initial state.
+  // Validate that startup context discriminant matches startup state.
   if (needsStateInjection) {
     const ctxState = (context as Record<string, unknown>).state
 
@@ -188,11 +217,11 @@ export const interpret = <T extends StateMachineInterface>(
       throw new StateMachineError({
         actual: ctxState,
         expected: state,
-        type: 'ContextFactoryStateInvalid',
+        type: 'ContextFactoryStateMismatch',
       })
     }
   }
-  let indexState = indiceStates.get(state)!
+  let indexState = hydratedIndexState
   let commitCursor = 0
   const subscriptions: Array<StateMachineSubscription<Model>> = []
 

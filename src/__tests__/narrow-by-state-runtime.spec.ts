@@ -358,7 +358,7 @@ describe('context factory validation', () => {
     assert.equal(svc.context.state, 'Loading')
   })
 
-  it('factory returning wrong state: throws ContextFactoryStateInvalid', () => {
+  it('factory returning wrong state: throws ContextFactoryStateMismatch', () => {
     const machine = stateMachine()
       .state('Loading')
       .state('Ready')
@@ -375,10 +375,10 @@ describe('context factory validation', () => {
 
     try {
       interpret(machine)
-      assert.fail('Expected ContextFactoryStateInvalid error')
+      assert.fail('Expected ContextFactoryStateMismatch error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
-      assert.ok(isStateMachineErrorOfType(error, 'ContextFactoryStateInvalid'))
+      assert.ok(isStateMachineErrorOfType(error, 'ContextFactoryStateMismatch'))
       assert.equal(error.cause.expected, 'Loading')
       assert.equal(error.cause.actual, 'Ready')
     }

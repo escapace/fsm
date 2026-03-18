@@ -63,11 +63,38 @@ console.log(service.context) // { balance: 0 }
 
 A machine definition declares states, actions, an initial state, an optional context factory, and transitions. `interpret(...)` turns that definition into a runnable service.
 
+`interpret(machine, { hydrate: { state, context } })` starts from a previously saved snapshot instead of the machine initial state and context factory.
+
+```ts
+const resumed = interpret(machine, {
+  hydrate: {
+    context: { balance: 25 },
+    state: State.Locked,
+  },
+})
+```
+
 ## Core model
 
 A running service exposes `state`, `context`, `do(action, payload?)`, `draft()`, and `subscribe(callback)`.
 
 Standalone interpretation requires an initial state. Composition does not add runtime hierarchy; after `.compose(...)` the machine is still flat.
+
+## Hydration
+
+Hydration restores a service from an explicit startup snapshot.
+
+Use it when runtime state has already been persisted and startup should resume from that snapshot instead of rebuilding from the machine definition.
+
+Rules:
+
+- hydration bypasses context factory execution
+- `hydrate` must be an object with `state` and `context` keys
+- hydrated `state` must be a declared state
+- if hydrated context has a `state` discriminant, it must match hydrated `state`
+- startup does not deep-clone hydrated context; pass a fresh object per service when shared references would be a problem
+- `hydrate: undefined` behaves the same as omitting hydration
+- prototype-inherited `hydrate` is ignored; hydration must be provided as an own property on the options object
 
 ## Outcome model
 
@@ -76,7 +103,7 @@ Most valid operations report ordinary outcomes through return values instead of 
 - `service.do(...)` and `draft.do(...)` return `true` on a selected transition and `false` when a valid dispatch does not select one
 - `subscribe(...)` returns an unsubscribe function
 - `draft.commit()` and `draft.discard()` return normally on success, including an empty-trace commit
-- thrown `StateMachineError` values indicate invalid definitions, undeclared actions, unsupported draft snapshots, closed drafts, or stale draft commits
+- thrown `StateMachineError` values indicate malformed definitions, malformed hydration payloads, undeclared actions, unsupported draft snapshots, closed drafts, or stale draft commits
 - exceptions thrown by user guards or reducers are propagated as-is (they are not wrapped as `StateMachineError`)
 
 A `false` dispatch always means the machine did not advance. State, context, and subscriptions remain unchanged.
@@ -171,7 +198,7 @@ const machine = stateMachine()
     [PinInputAction.Input, (_context, action) => !/^\d$/.test(action.payload.value)],
     PinInputState.Error,
     (context, action) => ({
-      error: `Invalid numeric input: ${action.payload.value}`,
+      error: `Input must be numeric: ${action.payload.value}`,
       focusedIndex: context.focusedIndex,
       state: PinInputState.Error as const,
       values: context.values,
@@ -249,21 +276,22 @@ Plain-object reconciliation does not preserve arbitrary property-descriptor beha
 
 All thrown errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
 
-| Error                        | Raised when                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ActionExists`               | `.action(...)` declares an action that already exists in the current machine.                                                  |
-| `ActionOverlap`              | `.compose(...)` introduces an action already used by a previously composed sibling.                                            |
-| `ActionUnknown`              | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
-| `ContextFactoryRequired`     | a context initializer is not a nullary function.                                                                               |
-| `ContextFactoryStateInvalid` | the initial context has a `state` discriminant that does not match the machine initial state.                                  |
-| `ContextGroupConflict`       | a parent context factory returns an own key that collides with a composed group name.                                          |
-| `DraftClosed`                | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
-| `DraftContextCloneFailed`    | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
-| `DraftOutOfDate`             | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
-| `GroupExists`                | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
-| `NotStateMachine`            | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
-| `StateExists`                | `.state(...)` declares a state that already exists, or `.compose(...)` introduces a child state that already exists.           |
-| `StateUnknown`               | `.initial(...)` or `.transition(...)` references a state that has not been declared.                                           |
+| Error                         | Raised when                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ActionExists`                | `.action(...)` declares an action that already exists in the current machine.                                                  |
+| `ActionOverlap`               | `.compose(...)` introduces an action already used by a previously composed sibling.                                            |
+| `ActionUnknown`               | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
+| `ContextFactoryRequired`      | a context initializer is not a nullary function.                                                                               |
+| `ContextFactoryStateMismatch` | startup context has a `state` discriminant that does not match the startup state.                                              |
+| `ContextGroupConflict`        | a parent context factory returns an own key that collides with a composed group name.                                          |
+| `DraftClosed`                 | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
+| `DraftContextCloneFailed`     | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
+| `DraftOutOfDate`              | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
+| `GroupExists`                 | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
+| `HydrationMalformed`          | `interpret(...)` receives a malformed `hydrate` payload that is not an object with `state` and `context` keys.                 |
+| `NotStateMachine`             | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
+| `StateExists`                 | `.state(...)` declares a state that already exists, or `.compose(...)` introduces a child state that already exists.           |
+| `StateUnknown`                | `.initial(...)`, `.transition(...)`, or hydrated startup references a state that has not been declared.                        |
 
 The package also exports `isStateMachineError(...)`, `isStateMachineErrorOfType(...)`, and `STATE_MACHINE_ERROR_TYPES`.
 

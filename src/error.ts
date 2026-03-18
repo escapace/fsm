@@ -5,12 +5,13 @@ export const STATE_MACHINE_ERROR_TYPES = [
   'ActionOverlap',
   'ActionUnknown',
   'ContextFactoryRequired',
-  'ContextFactoryStateInvalid',
+  'ContextFactoryStateMismatch',
   'ContextGroupConflict',
   'DraftClosed',
   'DraftContextCloneFailed',
   'DraftOutOfDate',
   'GroupExists',
+  'HydrationMalformed',
   'NotStateMachine',
   'StateExists',
   'StateUnknown',
@@ -25,7 +26,7 @@ export interface StateMachineErrorMetadata {
 
   // eslint-disable-next-line typescript/no-empty-object-type
   ContextFactoryRequired: {}
-  ContextFactoryStateInvalid: { actual: unknown; expected: StateMachineIdentifier }
+  ContextFactoryStateMismatch: { actual: unknown; expected: StateMachineIdentifier }
   ContextGroupConflict: { identifier: StateMachineIdentifier }
 
   // eslint-disable-next-line typescript/no-empty-object-type
@@ -34,6 +35,10 @@ export interface StateMachineErrorMetadata {
   DraftOutOfDate: { actualCursor: number; expectedCursor: number }
 
   GroupExists: { identifier: StateMachineIdentifier }
+
+  // eslint-disable-next-line typescript/no-empty-object-type
+  HydrationMalformed: {}
+
   StateExists: { identifier: StateMachineIdentifier }
   StateUnknown: { identifier: StateMachineIdentifier }
 
@@ -58,8 +63,8 @@ function formatMessage(cause: StateMachineErrorCause): string {
       return `No such action ${formatIdentifier(cause.identifier)}.`
     case 'ContextFactoryRequired':
       return 'Context initializer must be a nullary function.'
-    case 'ContextFactoryStateInvalid':
-      return `Context factory returned state ${formatIdentifier(cause.actual as StateMachineIdentifier)} but initial state is ${formatIdentifier(cause.expected)}.`
+    case 'ContextFactoryStateMismatch':
+      return `Startup context has state ${formatIdentifier(cause.actual as StateMachineIdentifier)} but startup state is ${formatIdentifier(cause.expected)}.`
     case 'ContextGroupConflict':
       return `Context key ${formatIdentifier(cause.identifier)} conflicts with a composed group name.`
     case 'DraftClosed':
@@ -70,6 +75,8 @@ function formatMessage(cause: StateMachineErrorCause): string {
       return `Draft is out of date (expected cursor ${cause.expectedCursor}, got ${cause.actualCursor}).`
     case 'GroupExists':
       return `Group ${formatIdentifier(cause.identifier)} already exists or conflicts with a declared state.`
+    case 'HydrationMalformed':
+      return 'Hydration payload must be an object with "state" and "context" keys.'
     case 'NotStateMachine':
       return 'Parameter is not a state machine.'
     case 'StateExists':

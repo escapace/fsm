@@ -393,6 +393,19 @@ export type InferStateMachineService<T extends StateMachineInterface> = StateMac
   InferStateMachineModel<T>
 >
 
+export interface StateMachineInterpretHydration<
+  T extends StateMachineInterface = StateMachineInterface,
+> {
+  context: InferStateMachineModel<T>['state']['context']
+  state: StateMachineStates<InferStateMachineModel<T>>
+}
+
+export interface StateMachineInterpretOptions<
+  T extends StateMachineInterface = StateMachineInterface,
+> {
+  hydrate?: StateMachineInterpretHydration<T>
+}
+
 export interface StateMachineAction<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
   A extends StateMachineStates<T> = StateMachineStates<T>,
