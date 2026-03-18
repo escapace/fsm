@@ -366,6 +366,8 @@ export interface StateMachineReadable<
   readonly state: StateMachineStates<T>
 }
 
+export type StateMachineDraftStatus = 'closed' | 'open' | 'stale'
+
 export interface StateMachineDraft<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > extends StateMachineReadable<T> {
@@ -373,6 +375,7 @@ export interface StateMachineDraft<
   commit: () => void
   discard: () => void
   draft: () => StateMachineDraft<T>
+  status: () => StateMachineDraftStatus
   subscribe: (subscription: StateMachineSubscription<T>) => () => void
 }
 

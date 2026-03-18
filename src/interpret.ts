@@ -10,9 +10,10 @@ import {
   STATE_MACHINE_STATE,
   type InferStateMachineModel,
   type StateMachineChange,
-  type StateMachineInterpretOptions,
   type StateMachineDraft,
+  type StateMachineDraftStatus,
   type StateMachineIdentifier,
+  type StateMachineInterpretOptions,
   type StateMachineInterface,
   type StateMachineService,
   type StateMachineSubscription,
@@ -55,15 +56,23 @@ interface InternalDraftFrame {
 
 const draftHeadCursor = (draft: InternalDraftFrame): number => draft.baseCursor + draft.trace.length
 
-const assertDraftOperational = (draft: InternalDraftFrame): void => {
+const inspectDraftLiveness = (draft: InternalDraftFrame): 'closed' | 'open' => {
   let cursor: InternalDraftFrame | undefined = draft
 
   while (cursor !== undefined) {
     if (cursor.closed) {
-      throw new StateMachineError({ type: 'DraftClosed' })
+      return 'closed'
     }
 
     cursor = cursor.parent
+  }
+
+  return 'open'
+}
+
+const assertDraftOperational = (draft: InternalDraftFrame): void => {
+  if (inspectDraftLiveness(draft) === 'closed') {
+    throw new StateMachineError({ type: 'DraftClosed' })
   }
 }
 
@@ -241,6 +250,18 @@ export const interpret = <T extends StateMachineInterface>(
     state: undefined,
   } as unknown as Change
 
+  const getDraftStatus = (draft: InternalDraftFrame): StateMachineDraftStatus => {
+    if (inspectDraftLiveness(draft) === 'closed') {
+      return 'closed'
+    }
+
+    if (draft.parent === undefined) {
+      return commitCursor === draft.baseCursor ? 'open' : 'stale'
+    }
+
+    return draftHeadCursor(draft.parent) === draft.baseCursor ? 'open' : 'stale'
+  }
+
   const createDraft = (
     parent: InternalDraftFrame | undefined,
     baseCursor: number,
@@ -367,6 +388,9 @@ export const interpret = <T extends StateMachineInterface>(
       discard() {
         assertDraftOperational(frame)
         closeDraftFrame(frame)
+      },
+      status() {
+        return getDraftStatus(frame)
       },
       // @ts-expect-error runtime hot path keeps direct payload parameter shape
       do(action, payload) {

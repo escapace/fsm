@@ -228,6 +228,8 @@ Draft behavior:
 
 - `draft.do(...)` returns `true`, `false`, or throws for the same reasons as service dispatch
 - a `false` draft dispatch leaves the draft snapshot unchanged
+- `draft.status()` returns `'open'`, `'stale'`, or `'closed'` as an advisory view of the draft's current lifecycle condition
+- `draft.status()` is non-authoritative; `commit()` still decides the real outcome and may still fail after an `'open'` result if the parent runtime advances first
 - drafts expose `draft.subscribe(...)`; successful local `draft.do(...)` calls notify only that draft
 - `draft.discard()` closes the handle and drops speculative work
 - `draft.draft()` creates a nested draft from the current draft snapshot

@@ -399,15 +399,94 @@ describe('draft runtime semantics', () => {
     const service = interpret(machine)
     const draft = service.draft()
 
+    assert.equal(draft.status(), 'open')
     assert.equal(draft.do('STEP'), true)
     draft.discard()
 
     assert.equal(service.state, 'A')
     assert.deepEqual(service.context, { count: 0 })
+    assert.equal(draft.status(), 'closed')
 
     assertErrorType(() => draft.do('STEP'), 'DraftClosed')
     assertErrorType(() => draft.commit(), 'DraftClosed')
     assertErrorType(() => draft.discard(), 'DraftClosed')
+  })
+
+  it('status reports stale root drafts after another root commit wins', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const left = service.draft()
+    const right = service.draft()
+
+    assert.equal(left.status(), 'open')
+    assert.equal(right.status(), 'open')
+
+    assert.equal(left.do('STEP'), true)
+    left.commit()
+
+    assert.equal(left.status(), 'closed')
+    assert.equal(right.status(), 'stale')
+  })
+
+  it('status reports stale root drafts with local changes after live service advancement', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(draft.status(), 'open')
+    assert.equal(service.do('STEP'), true)
+    assert.equal(draft.status(), 'stale')
+  })
+
+  it('status reports stale empty-trace root drafts after live service advancement', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.status(), 'open')
+    assert.equal(service.do('STEP'), true)
+    assert.equal(draft.status(), 'stale')
+  })
+
+  it('open status is advisory and does not guarantee root commit success', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const left = service.draft()
+    const right = service.draft()
+
+    assert.equal(right.status(), 'open')
+    assert.equal(left.do('STEP'), true)
+    left.commit()
+
+    assert.equal(right.status(), 'stale')
+    assertErrorType(() => right.commit(), 'DraftCommitConflict')
   })
 
   it('multiple root drafts conflict by DraftCommitConflict', () => {
@@ -476,13 +555,229 @@ describe('draft runtime semantics', () => {
     const parent = service.draft()
     const child = parent.draft()
 
+    assert.equal(child.status(), 'open')
+
     parent.discard()
 
+    assert.equal(child.status(), 'closed')
     assertErrorType(() => child.do('STEP'), 'DraftClosed')
     assertErrorType(() => child.commit(), 'DraftClosed')
     assertErrorType(() => child.discard(), 'DraftClosed')
     assertErrorType(() => child.draft(), 'DraftClosed')
     assertErrorType(() => child.subscribe(() => undefined), 'DraftClosed')
+  })
+
+  it('status reports stale child drafts after the parent advances', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const staleChild = parent.draft()
+    const winningChild = parent.draft()
+
+    assert.equal(staleChild.status(), 'open')
+    assert.equal(winningChild.do('STEP'), true)
+    winningChild.commit()
+
+    assert.equal(winningChild.status(), 'closed')
+    assert.equal(staleChild.status(), 'stale')
+  })
+
+  it('status reports stale child drafts after parent.do advances the parent cursor', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    assert.equal(child.status(), 'open')
+    assert.equal(parent.do('STEP'), true)
+    assert.equal(child.status(), 'stale')
+  })
+
+  it('closed status overrides stale when an ancestor closes later', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    assert.equal(parent.do('STEP'), true)
+    assert.equal(child.status(), 'stale')
+
+    parent.discard()
+
+    assert.equal(child.status(), 'closed')
+  })
+
+  it('open status is advisory and does not guarantee child commit success', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    assert.equal(child.status(), 'open')
+    assert.equal(parent.do('STEP'), true)
+
+    assert.equal(child.status(), 'stale')
+    assertErrorType(() => child.commit(), 'DraftCommitConflict')
+  })
+
+  it('status does not notify subscribers or change runtime state', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
+
+    const service = interpret(machine)
+    const draft = service.draft()
+    let draftNotifications = 0
+    let serviceNotifications = 0
+
+    draft.subscribe(() => {
+      draftNotifications += 1
+    })
+
+    service.subscribe(() => {
+      serviceNotifications += 1
+    })
+
+    assert.equal(draft.status(), 'open')
+    assert.equal(draft.status(), 'open')
+    assert.equal(service.state, 'A')
+    assert.deepEqual(service.context, { count: 0 })
+    assert.equal(draft.state, 'A')
+    assert.deepEqual(draft.context, { count: 0 })
+    assert.equal(draftNotifications, 0)
+    assert.equal(serviceNotifications, 0)
+  })
+
+  it('false draft.do leaves status unchanged', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('BLOCKED')
+      .transition('A', ['BLOCKED', () => false], 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.status(), 'open')
+    assert.equal(draft.do('BLOCKED'), false)
+    assert.equal(draft.status(), 'open')
+  })
+
+  it('throwing draft.do leaves status unchanged', () => {
+    const failure = new Error('draft-status-guard-failure')
+
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition(
+        'A',
+        [
+          'STEP',
+          () => {
+            throw failure
+          },
+        ],
+        'B',
+      )
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.status(), 'open')
+    assert.throws(() => draft.do('STEP'), failure)
+    assert.equal(draft.status(), 'open')
+  })
+
+  it('empty-trace root commit closes status', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const draft = service.draft()
+
+    assert.equal(draft.status(), 'open')
+    draft.commit()
+    assert.equal(draft.status(), 'closed')
+  })
+
+  it('empty-trace child commit closes status', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+
+    assert.equal(child.status(), 'open')
+    child.commit()
+    assert.equal(child.status(), 'closed')
+  })
+
+  it('grandchild becomes stale after immediate parent advancement', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine)
+    const parent = service.draft()
+    const child = parent.draft()
+    const grandchild = child.draft()
+
+    assert.equal(grandchild.status(), 'open')
+    assert.equal(child.do('STEP'), true)
+    assert.equal(grandchild.status(), 'stale')
   })
 
   it('ancestor commit closes descendants recursively', () => {
