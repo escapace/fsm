@@ -103,7 +103,7 @@ Most valid operations report ordinary outcomes through return values instead of 
 - `service.do(...)` and `draft.do(...)` return `true` on a selected transition and `false` when a valid dispatch does not select one
 - `subscribe(...)` returns an unsubscribe function
 - `draft.commit()` and `draft.discard()` return normally on success, including an empty-trace commit
-- thrown `StateMachineError` values indicate malformed definitions, malformed hydration payloads, undeclared actions, unsupported draft snapshots, closed drafts, or stale draft commits
+- thrown `StateMachineError` values indicate malformed definitions, hydration shape mismatches, undeclared actions, unsupported draft snapshots, closed drafts, or conflicting draft commits
 - exceptions thrown by user guards or reducers are propagated as-is (they are not wrapped as `StateMachineError`)
 
 A `false` dispatch always means the machine did not advance. State, context, and subscriptions remain unchanged.
@@ -239,9 +239,9 @@ Draft behavior:
 - empty-trace `commit()` is a no-op that still closes the draft
 - after `commit()` or `discard()`, mutating draft methods throw `DraftClosed`
 - commit and discard close the draft observation channel and recursively release descendant draft subscriptions
-- stale commits are rejected with `DraftOutOfDate`
+- conflicting commits are rejected with `DraftCommitConflict`
 
-Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, cycles, and shared references. Unsupported values such as functions fail at draft creation with `DraftContextCloneFailed`.
+Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, cycles, and shared references. Unsupported values such as functions fail at draft creation with `DraftSnapshotFailed`.
 
 ## Composition
 
@@ -276,22 +276,22 @@ Plain-object reconciliation does not preserve arbitrary property-descriptor beha
 
 All thrown errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
 
-| Error                         | Raised when                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ActionExists`                | `.action(...)` declares an action that already exists in the current machine.                                                  |
-| `ActionOverlap`               | `.compose(...)` introduces an action already used by a previously composed sibling.                                            |
-| `ActionUnknown`               | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
-| `ContextFactoryRequired`      | a context initializer is not a nullary function.                                                                               |
-| `ContextFactoryStateMismatch` | startup context has a `state` discriminant that does not match the startup state.                                              |
-| `ContextGroupConflict`        | a parent context factory returns an own key that collides with a composed group name.                                          |
-| `DraftClosed`                 | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
-| `DraftContextCloneFailed`     | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
-| `DraftOutOfDate`              | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
-| `GroupExists`                 | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
-| `HydrationMalformed`          | `interpret(...)` receives a malformed `hydrate` payload that is not an object with `state` and `context` keys.                 |
-| `NotStateMachine`             | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
-| `StateExists`                 | `.state(...)` declares a state that already exists, or `.compose(...)` introduces a child state that already exists.           |
-| `StateUnknown`                | `.initial(...)`, `.transition(...)`, or hydrated startup references a state that has not been declared.                        |
+| Error                        | Raised when                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ActionAlreadyDeclared`      | `.action(...)` declares an action that is already declared in the current machine.                                             |
+| `ActionConflict`             | `.compose(...)` introduces an action that conflicts with an action from a previously composed sibling.                         |
+| `ActionNotDeclared`          | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
+| `ContextInitializerExpected` | a context initializer is not a function with no arguments.                                                                     |
+| `ContextStateMismatch`       | startup context has a `state` discriminant that does not match the startup state.                                              |
+| `ContextGroupConflict`       | a parent context factory returns an own key that conflicts with a composed group name.                                         |
+| `DraftClosed`                | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
+| `DraftSnapshotFailed`        | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
+| `DraftCommitConflict`        | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
+| `GroupNameConflict`          | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
+| `HydrationShapeMismatch`     | `interpret(...)` receives a `hydrate` payload that is not an object with `state` and `context` keys.                           |
+| `StateMachineExpected`       | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
+| `StateAlreadyDeclared`       | `.state(...)` declares a state that is already declared, or `.compose(...)` introduces a child state that is already declared. |
+| `StateNotDeclared`           | `.initial(...)`, `.transition(...)`, or hydrated startup references a state that has not been declared.                        |
 
 The package also exports `isStateMachineError(...)`, `isStateMachineErrorOfType(...)`, and `STATE_MACHINE_ERROR_TYPES`.
 

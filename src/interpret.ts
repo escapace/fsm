@@ -160,7 +160,7 @@ export const interpret = <T extends StateMachineInterface>(
     typeof stateMachine[STATE_MACHINE_STATE] !== 'object' ||
     stateMachine[STATE_MACHINE_STATE] === null
   ) {
-    throw new StateMachineError({ type: 'NotStateMachine' })
+    throw new StateMachineError({ type: 'StateMachineExpected' })
   }
 
   const {
@@ -185,7 +185,7 @@ export const interpret = <T extends StateMachineInterface>(
       !Object.hasOwn(hydrate, 'state') ||
       !Object.hasOwn(hydrate, 'context')
     ) {
-      throw new StateMachineError({ type: 'HydrationMalformed' })
+      throw new StateMachineError({ type: 'HydrationShapeMismatch' })
     }
 
     context = (hydrate as { context: unknown }).context
@@ -201,7 +201,7 @@ export const interpret = <T extends StateMachineInterface>(
   const hydratedIndexState = indiceStates.get(state)
 
   if (hydratedIndexState === undefined) {
-    throw new StateMachineError({ identifier: state, type: 'StateUnknown' })
+    throw new StateMachineError({ identifier: state, type: 'StateNotDeclared' })
   }
 
   // Whether context carries a `state` discriminant. Invariant for the machine's
@@ -217,7 +217,7 @@ export const interpret = <T extends StateMachineInterface>(
       throw new StateMachineError({
         actual: ctxState,
         expected: state,
-        type: 'ContextFactoryStateMismatch',
+        type: 'ContextStateMismatch',
       })
     }
   }
@@ -270,7 +270,7 @@ export const interpret = <T extends StateMachineInterface>(
             throw new StateMachineError({
               actualCursor: commitCursor,
               expectedCursor: frame.baseCursor,
-              type: 'DraftOutOfDate',
+              type: 'DraftCommitConflict',
             })
           }
 
@@ -317,7 +317,7 @@ export const interpret = <T extends StateMachineInterface>(
           throw new StateMachineError({
             actualCursor: parentHead,
             expectedCursor: frame.baseCursor,
-            type: 'DraftOutOfDate',
+            type: 'DraftCommitConflict',
           })
         }
 
@@ -375,7 +375,7 @@ export const interpret = <T extends StateMachineInterface>(
         const indexAction = indiceActions.get(action)
 
         if (indexAction === undefined) {
-          throw new StateMachineError({ identifier: action, type: 'ActionUnknown' })
+          throw new StateMachineError({ identifier: action, type: 'ActionNotDeclared' })
         }
 
         const transitions = transitionMap.get(szudzik(frame.indexState, indexAction))
@@ -476,7 +476,7 @@ export const interpret = <T extends StateMachineInterface>(
       const indexAction = indiceActions.get(action)
 
       if (indexAction === undefined) {
-        throw new StateMachineError({ identifier: action, type: 'ActionUnknown' })
+        throw new StateMachineError({ identifier: action, type: 'ActionNotDeclared' })
       }
 
       const transitions = transitionMap.get(szudzik(indexState, indexAction))

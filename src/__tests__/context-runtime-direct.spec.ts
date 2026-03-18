@@ -139,16 +139,13 @@ const objectSurfaceCases: ObjectSurfaceCase[] = [
   },
 ]
 
-const assertDraftContextCloneFailed = (function_: () => unknown) => {
+const assertDraftSnapshotFailed = (function_: () => unknown) => {
   try {
     function_()
-    assert.fail('Expected StateMachineError(DraftContextCloneFailed)')
+    assert.fail('Expected StateMachineError(DraftSnapshotFailed)')
   } catch (error) {
     assert.equal(isStateMachineError(error), true)
-    assert.equal(
-      isStateMachineErrorOfType(error as StateMachineError, 'DraftContextCloneFailed'),
-      true,
-    )
+    assert.equal(isStateMachineErrorOfType(error as StateMachineError, 'DraftSnapshotFailed'), true)
   }
 }
 
@@ -429,8 +426,8 @@ describe('context runtime direct contracts', () => {
       )
     })
 
-    it('snapshotContext rejects unsupported values with DraftContextCloneFailed', () => {
-      assertDraftContextCloneFailed(() => {
+    it('snapshotContext rejects unsupported values with DraftSnapshotFailed', () => {
+      assertDraftSnapshotFailed(() => {
         snapshotContext({ bad: () => 1 })
       })
     })
@@ -445,7 +442,7 @@ describe('context runtime direct contracts', () => {
       assert.equal(published, current)
       assert.equal(typeof published.bad, 'function')
 
-      assertDraftContextCloneFailed(() => {
+      assertDraftSnapshotFailed(() => {
         snapshotContext(published)
       })
     })

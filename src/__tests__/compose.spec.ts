@@ -311,9 +311,9 @@ describe('compose', () => {
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
-      assert.equal(error.cause.type, 'ActionOverlap')
+      assert.equal(error.cause.type, 'ActionConflict')
 
-      if (isStateMachineErrorOfType(error, 'ActionOverlap')) {
+      if (isStateMachineErrorOfType(error, 'ActionConflict')) {
         assert.equal(error.cause.identifier, 'Shared')
       }
     }
@@ -342,6 +342,6 @@ describe('compose', () => {
     assert.throws(() => {
       // @ts-expect-error intentionally malformed machine input for runtime validation
       stateMachine().state('Root').compose('child', {})
-    }, 'Parameter is not a state machine.')
+    }, 'Expected a state machine definition.')
   })
 })

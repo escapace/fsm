@@ -264,7 +264,7 @@ const reconcileValue = (
  *
  * This function does not eagerly validate that the resulting graph remains snapshot-supported for
  * draft creation. Unsupported values can be published through reconciliation and may cause a later
- * call to `snapshotContext(...)` or `service.draft()` to fail with `DraftContextCloneFailed`.
+ * call to `snapshotContext(...)` or `service.draft()` to fail with `DraftSnapshotFailed`.
  *
  * @param parentContext - Existing live context value to update.
  * @param nextContext - Next context graph to publish into the existing value.
@@ -276,7 +276,7 @@ const normalizeSnapshotError = (error: unknown): StateMachineError =>
   new StateMachineError({
     /* v8 ignore next -- internal snapshot traversal throws Error subclasses; non-Error values are defensive fallback only */
     message: error instanceof Error ? error.message : undefined,
-    type: 'DraftContextCloneFailed',
+    type: 'DraftSnapshotFailed',
   })
 
 export function reconcileContext<T extends object>(parentContext: object, nextContext: T): T
@@ -299,13 +299,13 @@ export function reconcileContext(parentContext: unknown, nextContext: unknown): 
  * returned unchanged.
  *
  * Values that cannot participate in draft snapshots, such as functions, cause the operation to
- * fail. Failures are normalized to `StateMachineError` with the `DraftContextCloneFailed` type.
+ * fail. Failures are normalized to `StateMachineError` with the `DraftSnapshotFailed` type.
  *
  * @param value - Context value to snapshot.
  * @returns A detached snapshot that can be mutated without affecting the source value, or the
  * original primitive value when the input is non-object-like.
  * @throws {@link StateMachineError} When the value contains unsupported members and the snapshot
- * cannot be created. The error cause type is `DraftContextCloneFailed`.
+ * cannot be created. The error cause type is `DraftSnapshotFailed`.
  */
 export const snapshotContext = (value: unknown): unknown => {
   try {

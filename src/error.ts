@@ -1,49 +1,49 @@
 import type { StateMachineIdentifier } from './types'
 
 export const STATE_MACHINE_ERROR_TYPES = [
-  'ActionExists',
-  'ActionOverlap',
-  'ActionUnknown',
-  'ContextFactoryRequired',
-  'ContextFactoryStateMismatch',
+  'ActionAlreadyDeclared',
+  'ActionConflict',
+  'ActionNotDeclared',
+  'ContextInitializerExpected',
+  'ContextStateMismatch',
   'ContextGroupConflict',
   'DraftClosed',
-  'DraftContextCloneFailed',
-  'DraftOutOfDate',
-  'GroupExists',
-  'HydrationMalformed',
-  'NotStateMachine',
-  'StateExists',
-  'StateUnknown',
+  'DraftSnapshotFailed',
+  'DraftCommitConflict',
+  'GroupNameConflict',
+  'HydrationShapeMismatch',
+  'StateMachineExpected',
+  'StateAlreadyDeclared',
+  'StateNotDeclared',
 ] as const
 
 export type StateMachineErrorType = (typeof STATE_MACHINE_ERROR_TYPES)[number]
 
 export interface StateMachineErrorMetadata {
-  ActionExists: { identifier: StateMachineIdentifier }
-  ActionOverlap: { identifier: StateMachineIdentifier }
-  ActionUnknown: { identifier: StateMachineIdentifier }
+  ActionAlreadyDeclared: { identifier: StateMachineIdentifier }
+  ActionConflict: { identifier: StateMachineIdentifier }
+  ActionNotDeclared: { identifier: StateMachineIdentifier }
 
-  // eslint-disable-next-line typescript/no-empty-object-type
-  ContextFactoryRequired: {}
-  ContextFactoryStateMismatch: { actual: unknown; expected: StateMachineIdentifier }
   ContextGroupConflict: { identifier: StateMachineIdentifier }
+  // eslint-disable-next-line typescript/no-empty-object-type
+  ContextInitializerExpected: {}
+  ContextStateMismatch: { actual: unknown; expected: StateMachineIdentifier }
 
   // eslint-disable-next-line typescript/no-empty-object-type
   DraftClosed: {}
-  DraftContextCloneFailed: { message?: string }
-  DraftOutOfDate: { actualCursor: number; expectedCursor: number }
+  DraftCommitConflict: { actualCursor: number; expectedCursor: number }
+  DraftSnapshotFailed: { message?: string }
 
-  GroupExists: { identifier: StateMachineIdentifier }
-
-  // eslint-disable-next-line typescript/no-empty-object-type
-  HydrationMalformed: {}
-
-  StateExists: { identifier: StateMachineIdentifier }
-  StateUnknown: { identifier: StateMachineIdentifier }
+  GroupNameConflict: { identifier: StateMachineIdentifier }
 
   // eslint-disable-next-line typescript/no-empty-object-type
-  NotStateMachine: {}
+  HydrationShapeMismatch: {}
+
+  StateAlreadyDeclared: { identifier: StateMachineIdentifier }
+  StateNotDeclared: { identifier: StateMachineIdentifier }
+
+  // eslint-disable-next-line typescript/no-empty-object-type
+  StateMachineExpected: {}
 }
 
 export type StateMachineErrorCause<T extends StateMachineErrorType = StateMachineErrorType> =
@@ -55,34 +55,36 @@ function formatIdentifier(id: StateMachineIdentifier): string {
 
 function formatMessage(cause: StateMachineErrorCause): string {
   switch (cause.type) {
-    case 'ActionExists':
-      return `Action ${formatIdentifier(cause.identifier)} already exists.`
-    case 'ActionOverlap':
-      return `Action ${formatIdentifier(cause.identifier)} overlaps a previously composed child action.`
-    case 'ActionUnknown':
-      return `No such action ${formatIdentifier(cause.identifier)}.`
-    case 'ContextFactoryRequired':
-      return 'Context initializer must be a nullary function.'
-    case 'ContextFactoryStateMismatch':
-      return `Startup context has state ${formatIdentifier(cause.actual as StateMachineIdentifier)} but startup state is ${formatIdentifier(cause.expected)}.`
+    case 'ActionAlreadyDeclared':
+      return `Action ${formatIdentifier(cause.identifier)} is already declared.`
+    case 'ActionConflict':
+      return `Action ${formatIdentifier(cause.identifier)} conflicts with an action from a previously composed sibling machine.`
+    case 'ActionNotDeclared':
+      return `Action ${formatIdentifier(cause.identifier)} is not declared in this state machine.`
     case 'ContextGroupConflict':
       return `Context key ${formatIdentifier(cause.identifier)} conflicts with a composed group name.`
+    case 'ContextInitializerExpected':
+      return 'Context initializer must be a function with no arguments.'
+    case 'ContextStateMismatch':
+      return `Context state discriminant ${formatIdentifier(cause.actual as StateMachineIdentifier)} does not match startup state ${formatIdentifier(cause.expected)}.`
     case 'DraftClosed':
-      return 'Draft handle is closed.'
-    case 'DraftContextCloneFailed':
-      return cause.message ?? 'Failed to clone context for draft isolation.'
-    case 'DraftOutOfDate':
-      return `Draft is out of date (expected cursor ${cause.expectedCursor}, got ${cause.actualCursor}).`
-    case 'GroupExists':
-      return `Group ${formatIdentifier(cause.identifier)} already exists or conflicts with a declared state.`
-    case 'HydrationMalformed':
+      return 'Draft is closed or has a closed ancestor.'
+    case 'DraftCommitConflict':
+      return `Draft commit failed because the parent runtime advanced since draft creation (expected cursor ${cause.expectedCursor}, got ${cause.actualCursor}).`
+    case 'DraftSnapshotFailed':
+      return typeof cause.message === 'string'
+        ? `Draft snapshot failed: ${cause.message}`
+        : 'Draft snapshot failed because the current context could not be cloned.'
+    case 'GroupNameConflict':
+      return `Group name ${formatIdentifier(cause.identifier)} conflicts with an existing group or declared state.`
+    case 'HydrationShapeMismatch':
       return 'Hydration payload must be an object with "state" and "context" keys.'
-    case 'NotStateMachine':
-      return 'Parameter is not a state machine.'
-    case 'StateExists':
-      return `State ${formatIdentifier(cause.identifier)} already exists.`
-    case 'StateUnknown':
-      return `No such state ${formatIdentifier(cause.identifier)}.`
+    case 'StateAlreadyDeclared':
+      return `State ${formatIdentifier(cause.identifier)} is already declared.`
+    case 'StateMachineExpected':
+      return 'Expected a state machine definition.'
+    case 'StateNotDeclared':
+      return `State ${formatIdentifier(cause.identifier)} is not declared in this state machine.`
   }
 }
 

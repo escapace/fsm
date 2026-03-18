@@ -293,7 +293,7 @@ For a child draft whose parent is another draft:
 1. If this handle is closed, fail with `DraftClosed`.
 2. If any ancestor draft is closed, fail with `DraftClosed`.
 3. Let `parentHead = parent.baseCursor + length(parent.trace)`.
-4. If `parentHead ≠ this.baseCursor`, fail with `DraftOutOfDate`.
+4. If `parentHead ≠ this.baseCursor`, fail with `DraftCommitConflict`.
 5. If `trace` is empty, close this draft and return success without mutating the parent.
 6. Otherwise:
    - append `this.trace` to `parent.trace`,
@@ -308,7 +308,7 @@ No subscriptions fire, because drafts do not expose subscriptions (§4.13).
 For a root draft whose parent is the live service:
 
 1. If this handle is closed, fail with `DraftClosed`.
-2. If `serviceCursor ≠ this.baseCursor`, fail with `DraftOutOfDate`.
+2. If `serviceCursor ≠ this.baseCursor`, fail with `DraftCommitConflict`.
 3. If `trace` is empty, close this draft and return success without mutating the service.
 4. Otherwise, replay each selected step in `trace` onto the service in order:
    - apply the selected step directly to the service snapshot,
@@ -347,7 +347,7 @@ Advancement includes parent draft `do(...)` or commit from a sibling child draft
 
 #### Multiple drafts
 
-Multiple drafts are allowed. Conflict resolution is optimistic: the first successful commit wins; later commits against an advanced parent fail with `DraftOutOfDate`.
+Multiple drafts are allowed. Conflict resolution is optimistic: the first successful commit wins; later commits against an advanced parent fail with `DraftCommitConflict`.
 
 ### 4.13 — Subscription policy
 
@@ -401,40 +401,40 @@ The semantic model treats context as a value. Context cloning at draft creation,
 
 These errors are raised during machine construction (builder calls), not during dispatch:
 
-| Condition                                                                           | Error                                                      |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Adding a state identifier already in `S`                                            | "State already exists."                                    |
-| Adding an action identifier already in `A`                                          | "Action already exists."                                   |
-| Setting initial state to an identifier not in `S`                                   | "No such state."                                           |
-| Referencing a source or target state not in `S` in a transition                     | "No such state."                                           |
-| Referencing an action not in `A` in a transition                                    | "No such action."                                          |
-| Calling `interpret` on a value that is not a machine definition                     | "Parameter is not a state machine."                        |
-| Providing a non-function context initializer                                        | "Context initializer must be a nullary function."          |
-| Composing with a group name that is an existing state or group                      | "Group already exists or conflicts with a declared state." |
-| Composing with a child whose state names overlap parent or sibling states           | "State already exists."                                    |
-| Composing with a child whose action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
-| Composing with a value that is not a machine definition                             | "Parameter is not a state machine."                        |
+| Condition                                                                           | Error                                                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Adding a state identifier already in `S`                                            | "State … is already declared."                                                  |
+| Adding an action identifier already in `A`                                          | "Action … is already declared."                                                 |
+| Setting initial state to an identifier not in `S`                                   | "State … is not declared in this state machine."                                |
+| Referencing a source or target state not in `S` in a transition                     | "State … is not declared in this state machine."                                |
+| Referencing an action not in `A` in a transition                                    | "Action … is not declared in this state machine."                               |
+| Calling `interpret` on a value that is not a machine definition                     | "Expected a state machine definition."                                          |
+| Providing a non-function context initializer                                        | "Context initializer must be a function with no arguments."                     |
+| Composing with a group name that is an existing state or group                      | "Group name … conflicts with an existing group or declared state."              |
+| Composing with a child whose state names overlap parent or sibling states           | "State … is already declared."                                                  |
+| Composing with a child whose action overlaps a previously composed sibling's action | "Action … conflicts with an action from a previously composed sibling machine." |
+| Composing with a value that is not a machine definition                             | "Expected a state machine definition."                                          |
 
 ## 7 — Dispatch-time errors
 
-| Condition                   | Behavior                            |
-| --------------------------- | ----------------------------------- |
-| Action `a ∉ A`              | Throws "No such action."            |
-| No candidates for `(sₙ, a)` | Returns `false`                     |
-| All candidate guards fail   | Returns `false`                     |
-| A candidate is selected     | Executes transition, returns `true` |
+| Condition                   | Behavior                                                 |
+| --------------------------- | -------------------------------------------------------- |
+| Action `a ∉ A`              | Throws "Action … is not declared in this state machine." |
+| No candidates for `(sₙ, a)` | Returns `false`                                          |
+| All candidate guards fail   | Returns `false`                                          |
+| A candidate is selected     | Executes transition, returns `true`                      |
 
 ## 8 — Draft-time errors
 
-| Condition                                         | Behavior                         |
-| ------------------------------------------------- | -------------------------------- |
-| `do(...)` on a closed draft                       | Throws `DraftClosed`             |
-| `do(...)` on a draft with a closed ancestor       | Throws `DraftClosed`             |
-| `draft()` on a closed draft                       | Throws `DraftClosed`             |
-| `commit()` on a closed draft                      | Throws `DraftClosed`             |
-| `discard()` on a closed draft                     | Throws `DraftClosed`             |
-| `commit()` when parent cursor ≠ `baseCursor`      | Throws `DraftOutOfDate`          |
-| `draft()` when `structuredClone` fails on context | Throws `DraftContextCloneFailed` |
+| Condition                                         | Behavior                     |
+| ------------------------------------------------- | ---------------------------- |
+| `do(...)` on a closed draft                       | Throws `DraftClosed`         |
+| `do(...)` on a draft with a closed ancestor       | Throws `DraftClosed`         |
+| `draft()` on a closed draft                       | Throws `DraftClosed`         |
+| `commit()` on a closed draft                      | Throws `DraftClosed`         |
+| `discard()` on a closed draft                     | Throws `DraftClosed`         |
+| `commit()` when parent cursor ≠ `baseCursor`      | Throws `DraftCommitConflict` |
+| `draft()` when `structuredClone` fails on context | Throws `DraftSnapshotFailed` |
 
 ## 9 — Properties for Lean verification
 
@@ -517,7 +517,7 @@ If a child draft commits against an unchanged open parent draft, then the parent
 
 ### P18 — Stale commit rejection
 
-If parent cursor differs from `baseCursor`, commit rejects with `DraftOutOfDate` and leaves the parent unchanged. This is proved for both root drafts (`commitRootDraft`) and nested drafts (`commitChildDraft`).
+If parent cursor differs from `baseCursor`, commit rejects with `DraftCommitConflict` and leaves the parent unchanged. This is proved for both root drafts (`commitRootDraft`) and nested drafts (`commitChildDraft`).
 
 ### P19 — Draft failure preservation
 
@@ -543,7 +543,7 @@ The following are explicitly excluded from Lean formalization:
 - Subscription notification ordering during root draft commit replay (P16). The snapshot equality result is proved; the notification sequence follows from the runtime implementation.
 - Runtime lifecycle invariant connecting cursor equality to snapshot equality (P16). The Lean model takes `svc.snapshot = d.baseSnapshot` as an explicit hypothesis; the runtime guarantees this because every state change increments the cursor.
 - Trace non-extension on dispatch failure (P19). In the pure model, `appendStep` is called only after successful dispatch, making non-extension structural rather than a theorem.
-- Draft error-type semantics: `DraftClosed` and `DraftOutOfDate` as specific error constructors (P18, P20). The Lean model uses `outOfDate` result constructors and a chain predicate; the mapping to runtime error types is straightforward.
+- Draft error-type semantics: `DraftClosed` and `DraftCommitConflict` as specific error constructors (P18, P20). The Lean model uses `outOfDate` result constructors and a chain predicate; the mapping to runtime error types is straightforward.
 
 ## 11 — Composition semantics
 
@@ -621,13 +621,13 @@ Build order does not affect the resulting compound context: `context(...).compos
 
 ### 11.7 — Composition diagnostics
 
-| Condition                                                    | Error                                                      |
-| ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Child is not a machine definition                            | "Parameter is not a state machine."                        |
-| Group name is an existing state or existing group            | "Group already exists or conflicts with a declared state." |
-| Parent context value defines a composed group key            | "Context key … conflicts with a composed group name."      |
-| Child state overlaps parent or sibling state                 | "State already exists."                                    |
-| Child action overlaps a previously composed sibling's action | "Action … overlaps a previously composed child action."    |
+| Condition                                                    | Error                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Child is not a machine definition                            | "Expected a state machine definition."                                          |
+| Group name is an existing state or existing group            | "Group name … conflicts with an existing group or declared state."              |
+| Parent context value defines a composed group key            | "Context key … conflicts with a composed group name."                           |
+| Child state overlaps parent or sibling state                 | "State … is already declared."                                                  |
+| Child action overlaps a previously composed sibling's action | "Action … conflicts with an action from a previously composed sibling machine." |
 
 ### 11.8 — Nested composition
 

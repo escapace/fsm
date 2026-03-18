@@ -106,7 +106,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
     assert.deepEqual(parent.context, childContext)
   })
 
-  it('P18: stale root and stale child commits reject with DraftOutOfDate', () => {
+  it('P18: stale root and stale child commits reject with DraftCommitConflict', () => {
     const machine = stateMachine()
       .state('A')
       .state('B')
@@ -123,7 +123,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
     left.do('STEP')
     left.commit()
     right.do('STEP')
-    assertErrorType(() => right.commit(), 'DraftOutOfDate')
+    assertErrorType(() => right.commit(), 'DraftCommitConflict')
 
     const parent = service.draft()
     const staleChild = parent.draft()
@@ -133,7 +133,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
     sibling.commit()
 
     staleChild.do('STEP')
-    assertErrorType(() => staleChild.commit(), 'DraftOutOfDate')
+    assertErrorType(() => staleChild.commit(), 'DraftCommitConflict')
   })
 
   it('P19: draft failure behavior matches dispatch and does not extend effective trace', () => {
@@ -149,7 +149,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
     const draft = service.draft()
 
     assert.equal(draft.do('BLOCKED'), false)
-    assertErrorType(() => draft.do('UNKNOWN' as never), 'ActionUnknown')
+    assertErrorType(() => draft.do('UNKNOWN' as never), 'ActionNotDeclared')
 
     draft.commit()
 

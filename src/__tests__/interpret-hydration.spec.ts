@@ -33,7 +33,7 @@ describe('interpret hydration', () => {
     assert.deepEqual(service.context, { count: 2 })
   })
 
-  it('rejects unknown hydrated state with StateUnknown', () => {
+  it('rejects unknown hydrated state with StateNotDeclared', () => {
     const machine = stateMachine()
       .state('A')
       .initial('A')
@@ -47,10 +47,10 @@ describe('interpret hydration', () => {
           state: 'Z' as never,
         },
       })
-      assert.fail('expected StateUnknown')
+      assert.fail('expected StateNotDeclared')
     } catch (error) {
       assert.equal(isStateMachineError(error), true)
-      assert.equal(isStateMachineErrorOfType(error as StateMachineError, 'StateUnknown'), true)
+      assert.equal(isStateMachineErrorOfType(error as StateMachineError, 'StateNotDeclared'), true)
     }
   })
 
@@ -73,11 +73,11 @@ describe('interpret hydration', () => {
           state: 'B',
         },
       })
-      assert.fail('expected ContextFactoryStateMismatch')
+      assert.fail('expected ContextStateMismatch')
     } catch (error) {
       assert.equal(isStateMachineError(error), true)
       assert.equal(
-        isStateMachineErrorOfType(error as StateMachineError, 'ContextFactoryStateMismatch'),
+        isStateMachineErrorOfType(error as StateMachineError, 'ContextStateMismatch'),
         true,
       )
     }
@@ -204,11 +204,11 @@ describe('interpret hydration', () => {
     for (const options of cases) {
       try {
         interpret(machine, options as never)
-        assert.fail('expected HydrationMalformed')
+        assert.fail('expected HydrationShapeMismatch')
       } catch (error) {
         assert.equal(isStateMachineError(error), true)
         assert.equal(
-          isStateMachineErrorOfType(error as StateMachineError, 'HydrationMalformed'),
+          isStateMachineErrorOfType(error as StateMachineError, 'HydrationShapeMismatch'),
           true,
         )
       }
@@ -304,10 +304,13 @@ describe('interpret hydration', () => {
 
     try {
       right.commit()
-      assert.fail('expected DraftOutOfDate')
+      assert.fail('expected DraftCommitConflict')
     } catch (error) {
       assert.equal(isStateMachineError(error), true)
-      assert.equal(isStateMachineErrorOfType(error as StateMachineError, 'DraftOutOfDate'), true)
+      assert.equal(
+        isStateMachineErrorOfType(error as StateMachineError, 'DraftCommitConflict'),
+        true,
+      )
     }
   })
 
@@ -331,7 +334,7 @@ describe('interpret hydration', () => {
 
     const seen: string[] = []
 
-    let unsubscribeSecond = () => undefined
+    let unsubscribeSecond: () => void = () => undefined
 
     service.subscribe((change) => {
       seen.push(String(change.state))

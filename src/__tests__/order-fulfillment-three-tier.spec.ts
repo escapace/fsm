@@ -456,6 +456,6 @@ describe('three-tier order orchestration (runtime)', () => {
 
     assert.throws(() => {
       service.do('UNKNOWN_ACTION' as never)
-    }, 'No such action "UNKNOWN_ACTION".')
+    }, 'Action "UNKNOWN_ACTION" is not declared in this state machine.')
   })
 })

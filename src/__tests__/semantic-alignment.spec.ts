@@ -217,7 +217,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
 
     assert.throws(() => {
       service.do('UNKNOWN_ACTION' as never)
-    }, 'No such action "UNKNOWN_ACTION".')
+    }, 'Action "UNKNOWN_ACTION" is not declared in this state machine.')
 
     assert.equal(guard.mock.calls.length, 0)
     assert.equal(service.state, S.A)
@@ -290,16 +290,16 @@ describe('Lean tranche alignment (P1–P6)', () => {
       assert.ok(isStateMachineError(error))
       assert.ok(error instanceof StateMachineError)
       assert.equal(error.name, 'StateMachineError')
-      assert.equal(error.cause.type, 'StateUnknown')
-      assert.equal(error.message, 'No such state "Z".')
+      assert.equal(error.cause.type, 'StateNotDeclared')
+      assert.equal(error.message, 'State "Z" is not declared in this state machine.')
 
-      assert.ok(isStateMachineErrorOfType(error, 'StateUnknown'))
+      assert.ok(isStateMachineErrorOfType(error, 'StateNotDeclared'))
 
-      if (isStateMachineErrorOfType(error, 'StateUnknown')) {
+      if (isStateMachineErrorOfType(error, 'StateNotDeclared')) {
         assert.equal(error.cause.identifier, 'Z')
       }
 
-      assert.ok(!isStateMachineErrorOfType(error, 'ActionUnknown'))
+      assert.ok(!isStateMachineErrorOfType(error, 'ActionNotDeclared'))
     }
 
     assert.ok(!isStateMachineError(new Error('unrelated')))
@@ -314,7 +314,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
-      assert.equal(error.message, 'State Symbol(myState) already exists.')
+      assert.equal(error.message, 'State Symbol(myState) is already declared.')
     }
   })
 
@@ -329,8 +329,8 @@ describe('Lean tranche alignment (P1–P6)', () => {
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
-      assert.equal(error.cause.type, 'ContextFactoryRequired')
-      assert.equal(error.message, 'Context initializer must be a nullary function.')
+      assert.equal(error.cause.type, 'ContextInitializerExpected')
+      assert.equal(error.message, 'Context initializer must be a function with no arguments.')
     }
   })
 
@@ -367,7 +367,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
-      assert.equal(error.cause.type, 'GroupExists')
+      assert.equal(error.cause.type, 'GroupNameConflict')
     }
   })
 })

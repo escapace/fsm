@@ -82,7 +82,10 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
   switch (action.type) {
     case StateMachineBuilderActionType.Action: {
       if (model.state.actions.indexOf(action.payload.action) !== -1) {
-        throw new StateMachineError({ identifier: action.payload.action, type: 'ActionExists' })
+        throw new StateMachineError({
+          identifier: action.payload.action,
+          type: 'ActionAlreadyDeclared',
+        })
       }
 
       model.state.actions.push(action.payload.action)
@@ -96,23 +99,29 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
       const childState = child[STATE_MACHINE_STATE]
 
       if (childState === undefined || childState === null || typeof childState !== 'object') {
-        throw new StateMachineError({ type: 'NotStateMachine' })
+        throw new StateMachineError({ type: 'StateMachineExpected' })
       }
 
       if (
         model.state.compositions.has(action.payload.group) ||
         model.state.states.indexOf(action.payload.group) !== -1
       ) {
-        throw new StateMachineError({ identifier: action.payload.group, type: 'GroupExists' })
+        throw new StateMachineError({ identifier: action.payload.group, type: 'GroupNameConflict' })
       }
 
       for (const childStateIdentifier of childState.states) {
         if (childStateIdentifier === action.payload.group) {
-          throw new StateMachineError({ identifier: action.payload.group, type: 'GroupExists' })
+          throw new StateMachineError({
+            identifier: action.payload.group,
+            type: 'GroupNameConflict',
+          })
         }
 
         if (model.state.states.indexOf(childStateIdentifier) !== -1) {
-          throw new StateMachineError({ identifier: childStateIdentifier, type: 'StateExists' })
+          throw new StateMachineError({
+            identifier: childStateIdentifier,
+            type: 'StateAlreadyDeclared',
+          })
         }
       }
 
@@ -129,7 +138,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
           if (sibling[STATE_MACHINE_STATE].actions.indexOf(childActionIdentifier) !== -1) {
             throw new StateMachineError({
               identifier: childActionIdentifier,
-              type: 'ActionOverlap',
+              type: 'ActionConflict',
             })
           }
         }
@@ -200,18 +209,18 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
 
           /* v8 ignore start -- defensive: builder guarantees child actions/states are merged */
           if (indexAction === -1) {
-            throw new StateMachineError({ identifier: lifted.action, type: 'ActionUnknown' })
+            throw new StateMachineError({ identifier: lifted.action, type: 'ActionNotDeclared' })
           }
 
           const indexSource = model.state.states.indexOf(lifted.source)
           const indexTarget = model.state.states.indexOf(lifted.target)
 
           if (indexSource === -1) {
-            throw new StateMachineError({ identifier: lifted.source, type: 'StateUnknown' })
+            throw new StateMachineError({ identifier: lifted.source, type: 'StateNotDeclared' })
           }
 
           if (indexTarget === -1) {
-            throw new StateMachineError({ identifier: lifted.target, type: 'StateUnknown' })
+            throw new StateMachineError({ identifier: lifted.target, type: 'StateNotDeclared' })
           }
           /* v8 ignore stop */
 
@@ -243,7 +252,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
     }
     case StateMachineBuilderActionType.InitialState: {
       if (model.state.states.indexOf(action.payload) === -1) {
-        throw new StateMachineError({ identifier: action.payload, type: 'StateUnknown' })
+        throw new StateMachineError({ identifier: action.payload, type: 'StateNotDeclared' })
       }
 
       model.state.initial = action.payload
@@ -251,7 +260,10 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
     }
     case StateMachineBuilderActionType.State: {
       if (model.state.states.indexOf(action.payload.state) !== -1) {
-        throw new StateMachineError({ identifier: action.payload.state, type: 'StateExists' })
+        throw new StateMachineError({
+          identifier: action.payload.state,
+          type: 'StateAlreadyDeclared',
+        })
       }
 
       model.state.states.push(action.payload.state)
@@ -265,16 +277,19 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
 
       /* v8 ignore start -- defensive: transition() builder pre-checks action */
       if (indexAction === -1) {
-        throw new StateMachineError({ identifier: action.payload.action, type: 'ActionUnknown' })
+        throw new StateMachineError({
+          identifier: action.payload.action,
+          type: 'ActionNotDeclared',
+        })
       }
       /* v8 ignore stop */
 
       if (indexSource === -1) {
-        throw new StateMachineError({ identifier: action.payload.source, type: 'StateUnknown' })
+        throw new StateMachineError({ identifier: action.payload.source, type: 'StateNotDeclared' })
       }
 
       if (indexTarget === -1) {
-        throw new StateMachineError({ identifier: action.payload.target, type: 'StateUnknown' })
+        throw new StateMachineError({ identifier: action.payload.target, type: 'StateNotDeclared' })
       }
 
       const indexTransition = szudzik(indexSource, indexAction)
@@ -370,7 +385,7 @@ const transition =
       : { action, predicates: [] }
 
     if (model.state.actions.indexOf(ap.action) === -1) {
-      throw new StateMachineError({ identifier: ap.action, type: 'ActionUnknown' })
+      throw new StateMachineError({ identifier: ap.action, type: 'ActionNotDeclared' })
     }
 
     const next = product(

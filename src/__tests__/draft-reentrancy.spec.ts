@@ -71,7 +71,7 @@ describe('draft reentrancy and callback mutation semantics', () => {
     assert.deepEqual(seen, ['A', 'C'])
   })
 
-  it('reentrant child.commit during child publication replay rejects with DraftOutOfDate', () => {
+  it('reentrant child.commit during child publication replay rejects with DraftCommitConflict', () => {
     const machine = stateMachine()
       .state('A')
       .state('B')
@@ -99,7 +99,7 @@ describe('draft reentrancy and callback mutation semantics', () => {
 
     assert.equal(isStateMachineError(reentrantError), true)
     assert.equal(
-      isStateMachineErrorOfType(reentrantError as StateMachineError, 'DraftOutOfDate'),
+      isStateMachineErrorOfType(reentrantError as StateMachineError, 'DraftCommitConflict'),
       true,
     )
   })

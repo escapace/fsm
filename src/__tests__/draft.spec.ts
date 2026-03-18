@@ -140,7 +140,7 @@ describe('draft runtime semantics', () => {
     assert.equal(draft.do('BLOCKED'), false)
     assert.equal(draft.state, 'A')
 
-    assertErrorType(() => draft.do('UNKNOWN' as never), 'ActionUnknown')
+    assertErrorType(() => draft.do('UNKNOWN' as never), 'ActionNotDeclared')
   })
 
   it('root commit replays notifications in order', () => {
@@ -410,7 +410,7 @@ describe('draft runtime semantics', () => {
     assertErrorType(() => draft.discard(), 'DraftClosed')
   })
 
-  it('multiple root drafts conflict by DraftOutOfDate', () => {
+  it('multiple root drafts conflict by DraftCommitConflict', () => {
     const machine = stateMachine()
       .state('A')
       .state('B')
@@ -426,7 +426,7 @@ describe('draft runtime semantics', () => {
     left.commit()
 
     assert.equal(right.do('STEP'), true)
-    assertErrorType(() => right.commit(), 'DraftOutOfDate')
+    assertErrorType(() => right.commit(), 'DraftCommitConflict')
   })
 
   it('nested drafts commit recursively into parent and then service', () => {
@@ -664,6 +664,6 @@ describe('draft runtime semantics', () => {
 
     const service = interpret(machine)
 
-    assertErrorType(() => service.draft(), 'DraftContextCloneFailed')
+    assertErrorType(() => service.draft(), 'DraftSnapshotFailed')
   })
 })
