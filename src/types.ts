@@ -300,7 +300,7 @@ export type StateMachineActionPayload<
       : never
     : never
 
-type StateMachineTransitionsAtState<T> = T extends {
+export type StateMachineTransitionsAtState<T> = T extends {
   __transitions: infer Tr extends Array<{
     action: StateMachineIdentifierAction
     source: StateMachineIdentifierState
