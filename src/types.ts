@@ -4,7 +4,6 @@
 
 import type $ from '@escapace/typelevel'
 
-export const STATE_MACHINE_LOG = Symbol.for('@escapace/fsm/log')
 export const STATE_MACHINE_STATE = Symbol.for('@escapace/fsm/state')
 
 export enum StateMachineBuilderActionType {
@@ -85,6 +84,12 @@ export interface StateMachineBuilderState {
   indiceStates: Map<StateMachineIdentifierState, number>
   states: StateMachineIdentifierState[]
   transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>
+  __compositions?: Array<{ group: StateMachineIdentifierState; machine: StateMachineInterface }>
+  __transitions?: Array<{
+    action: StateMachineIdentifierAction
+    source: StateMachineIdentifierState
+    target: StateMachineIdentifierState
+  }>
   initial?: StateMachineIdentifierState
 }
 
@@ -95,10 +100,8 @@ export interface StateMachineBuilderInitialState extends StateMachineBuilderStat
 }
 
 export interface StateMachineBuilderModel<
-  T extends StateMachineBuilderAction[] = any[],
   U extends StateMachineBuilderState = StateMachineBuilderState,
 > {
-  log: T
   state: U
 }
 
@@ -131,14 +134,21 @@ export type StateMachineChildModelOf<M extends StateMachineInterface> = InferSta
 export type StateMachineChildStateOf<M extends StateMachineInterface> =
   StateMachineChildModelOf<M>['state']
 
-export type StateMachineComposeLogEntries<P extends StateMachineBuilderModel> = Extract<
-  $.Values<P['log']>,
-  StateMachineBuilderActionCompose<any, any>
->
+type StateMachineCompositionsAtState<T> = T extends {
+  __compositions: infer C extends Array<{
+    group: StateMachineIdentifierState
+    machine: StateMachineInterface
+  }>
+}
+  ? $.Values<C>
+  : never
+
+export type StateMachineComposeLogEntries<P extends StateMachineBuilderModel> =
+  StateMachineCompositionsAtState<P['state']>
 
 export type StateMachineExistingGroups<P extends StateMachineBuilderModel> =
   StateMachineComposeLogEntries<P> extends infer U
-    ? U extends StateMachineBuilderActionCompose<infer G>
+    ? U extends { group: infer G }
       ? G
       : never
     : never
@@ -149,7 +159,7 @@ export type StateMachineActionPayloadsAtState<S> = S extends { __actionPayloads:
 
 export type StateMachineComposedChildActions<P extends StateMachineBuilderModel> =
   StateMachineComposeLogEntries<P> extends infer U
-    ? U extends StateMachineBuilderActionCompose<any, infer M>
+    ? U extends { machine: infer M extends StateMachineInterface }
       ? StateMachineActions<StateMachineChildModelOf<M>>
       : never
     : never
@@ -234,6 +244,10 @@ export type StateMachineBuilderReducer<
                 StateMachineActionPayloadsAtState<StateMachineChildStateOf<M>>
               >
             >
+            __compositions: $.Cons<
+              { group: G; machine: M },
+              T extends { __compositions: infer C extends any[] } ? C : []
+            >
             actions: $.Concat<T['actions'], StateMachineChildStateOf<M>['actions']>
             context: StateMachineCompoundContext<
               T['context'],
@@ -258,21 +272,36 @@ export type StateMachineBuilderReducer<
       [StateMachineBuilderActionType.State]: U extends StateMachineBuilderActionState<infer S>
         ? { states: $.Cons<S, T['states']> }
         : never
-      [StateMachineBuilderActionType.Transition]: {}
+      [StateMachineBuilderActionType.Transition]: U extends StateMachineBuilderActionTransition<
+        infer A,
+        infer B,
+        infer C
+      >
+        ? {
+            __transitions: $.Cons<
+              { action: B; source: A; target: C },
+              T extends { __transitions: infer Tr extends any[] } ? Tr : []
+            >
+          }
+        : never
     }[$.Cast<U['type'], StateMachineBuilderActionType>]
   >,
-  { __actionPayloads?: Record<StateMachineIdentifierAction, unknown> } & StateMachineBuilderState
+  {
+    __actionPayloads?: Record<StateMachineIdentifierAction, unknown>
+    __compositions?: Array<{ group: StateMachineIdentifierState; machine: StateMachineInterface }>
+    __transitions?: Array<{
+      action: StateMachineIdentifierAction
+      source: StateMachineIdentifierState
+      target: StateMachineIdentifierState
+    }>
+  } & StateMachineBuilderState
 >
 
 export type StateMachineBuilderStage<
-  T extends StateMachineBuilderModel = { log: []; state: StateMachineBuilderInitialState },
+  T extends StateMachineBuilderModel = { state: StateMachineBuilderInitialState },
   U extends StateMachineBuilderAction = never,
 > = StateMachine<
-  $.If<
-    $.Is.Never<U>,
-    T,
-    StateMachineBuilderModel<$.Cons<U, T['log']>, StateMachineBuilderReducer<T['state'], U>>
-  >
+  $.If<$.Is.Never<U>, T, StateMachineBuilderModel<StateMachineBuilderReducer<T['state'], U>>>
 >
 
 export type StateMachineActions<T extends StateMachineBuilderModel> = $.Values<
@@ -288,22 +317,24 @@ export type StateMachineActionPayload<
   ? StateMachineActionPayloadsAtState<T['state']>[U]
   : never
 
+type StateMachineTransitionsAtState<T> = T extends {
+  __transitions: infer Tr extends Array<{
+    action: StateMachineIdentifierAction
+    source: StateMachineIdentifierState
+    target: StateMachineIdentifierState
+  }>
+}
+  ? $.Values<Tr>
+  : never
+
 export type StateMachineTransitionPayloadsOwn<T extends StateMachineBuilderModel> =
-  Extract<$.Values<T['log']>, StateMachineBuilderActionTransition<any, any, any>> extends infer E
-    ? E extends StateMachineBuilderActionTransition<infer A, infer B, infer C>
-      ? {
-          action: B
-          source: A
-          target: C
-        }
-      : never
-    : never
+  StateMachineTransitionsAtState<T['state']>
 
 export type StateMachineTransitionPayloadsComposed<T extends StateMachineBuilderModel> = [
   StateMachineComposeLogEntries<T>,
 ] extends [never]
   ? never
-  : StateMachineComposeLogEntries<T> extends StateMachineBuilderActionCompose<any, infer M>
+  : StateMachineComposeLogEntries<T> extends { machine: infer M extends StateMachineInterface }
     ? StateMachineTransitionPayloads<StateMachineChildModelOf<M>>
     : never
 
@@ -388,8 +419,8 @@ export interface StateMachineService<
 }
 
 export type InferStateMachineModel<T extends StateMachineInterface> =
-  T extends StateMachineInterface<StateMachineBuilderModel<infer A, infer B>>
-    ? StateMachineBuilderModel<A, B>
+  T extends StateMachineInterface<StateMachineBuilderModel<infer U>>
+    ? StateMachineBuilderModel<U>
     : never
 
 export type InferStateMachineService<T extends StateMachineInterface> = StateMachineService<
@@ -450,7 +481,6 @@ export type StateMachineReducer<
 export interface StateMachineInterface<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > {
-  [STATE_MACHINE_LOG]: T['log']
   [STATE_MACHINE_STATE]: T['state']
 }
 
@@ -508,6 +538,6 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
       : [reducer: StateMachineReducer<T, NoInfer<A>, NoInfer<B>, NoInfer<C>>]
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionTransition<A, B, C>>,
-    'compose' | 'transition' | typeof STATE_MACHINE_LOG | typeof STATE_MACHINE_STATE
+    'compose' | 'transition' | typeof STATE_MACHINE_STATE
   >
 }

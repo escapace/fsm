@@ -7,7 +7,6 @@ import { isObject } from './is-object'
 import { StateMachineError } from './error'
 import { product } from './product'
 import {
-  STATE_MACHINE_LOG,
   STATE_MACHINE_STATE,
   StateMachineBuilderActionType,
   type StateMachineBuilder,
@@ -77,8 +76,6 @@ const composeContextSource = (
 }
 
 const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
-  model.log.unshift(action)
-
   switch (action.type) {
     case StateMachineBuilderActionType.Action: {
       if (model.state.actions.indexOf(action.payload.action) !== -1) {
@@ -408,7 +405,6 @@ const transition =
 
     return {
       compose: compose(next),
-      [STATE_MACHINE_LOG]: next.log,
       [STATE_MACHINE_STATE]: next.state,
       transition: transition(next),
     }
@@ -431,7 +427,6 @@ const initial = (model: StateMachineBuilderModel) => (argument: StateMachineIden
  */
 export const stateMachine = (
   model: StateMachineBuilderModel = {
-    log: [],
     state: {
       actions: [],
       compositions: new Map(),
