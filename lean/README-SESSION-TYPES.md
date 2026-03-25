@@ -20,9 +20,9 @@ The layering is:
 ```text
 lean/README.md           flat EFSM semantics
   ↓
-this document §1–§5      protocol-boundary semantics
+this document §1–§6      protocol-boundary semantics
   ↓
-this document §6–§10     projection semantics
+this document §7–§12     projection semantics
 ```
 
 ## Scope
@@ -131,7 +131,13 @@ A successful local selected step may carry an outbound protocol effect:
 ProtocolEffect = none | send(ℓ)
 ```
 
-The derivation function `deriveEffect` is supplied as a boundary configuration parameter.
+The derivation function `deriveEffect` is supplied as a boundary configuration parameter. It is realized as a per-action map supplied at boundary construction time:
+
+```text
+deriveEffect : Record<ActionId, (selectedStep) → ProtocolEffect>
+```
+
+Actions absent from the map produce `ProtocolEffect.none`. The semantic model requires only the function signature `SelectedStep → ProtocolEffect`; the per-action map is the authoring surface that satisfies it.
 
 ### 1.9 — External receive event
 
@@ -151,7 +157,13 @@ A boundary configuration supplies a mapping from `(machineSnapshot, receiveEvent
 deriveReceiveStep(machineSnapshot, ρ) = success(rule, info) | machineFailure | unknownAction
 ```
 
-This is a deterministic partial function. Its exact runtime authoring surface is outside the semantic model.
+This is a deterministic partial function. It is realized as a per-label map supplied at boundary construction time:
+
+```text
+deriveReceiveStep : Record<LabelId, (payload?) → { action, payload? }>
+```
+
+Labels absent from the map produce `unknownAction`. The boundary wrapper converts each map entry into the full `(machineSnapshot, ρ) → result` function by performing EFSM candidate lookup and guard evaluation against the mapped action. The semantic model requires only the function signature; the per-label map is the authoring surface that satisfies it.
 
 ### 1.11 — Boundary-selected step
 
@@ -242,6 +254,19 @@ If `deriveEffect(machineStep) = send(ℓ)` but `endpointCandidates(q, ℓ)` is e
 
 Boundary dispatch is deterministic given fixed guard behavior, fixed `deriveEffect`, and fixed endpoint transition order.
 
+### 2.7 — Dispatch error behavior
+
+The boundary dispatch result type (§2.2) maps to runtime behavior as follows:
+
+| Result | Runtime behavior | Rationale |
+| --- | --- | --- |
+| `unknownAction` | **Throw** | Consistent with EFSM layer (§2.1 of `lean/README.md`). An undeclared action is a programming error. |
+| `machineFailure` | **Return `false`** | Consistent with EFSM layer (§2.4 of `lean/README.md`). No candidates or all guards failed. |
+| `protocolViolation` | **Throw `ProtocolViolation`** | The `deriveEffect` configuration is inconsistent with the endpoint automaton at the current state. This is a configuration error, not a runtime condition. |
+| `success` | **Return `true`** | Consistent with EFSM layer (§2.5 of `lean/README.md`). |
+
+The Lean model uses algebraic result types without distinguishing throw from return. The mapping above is the runtime convention.
+
 ## 3 — Receive-side boundary semantics
 
 A receive-side boundary operation is a second entry path alongside outbound dispatch. It processes externally supplied inbound protocol events.
@@ -273,6 +298,15 @@ If endpoint candidates exist but the machine mapping returns `unknownAction` or 
 ### 3.6 — Determinism
 
 Receive-side boundary selection is deterministic given fixed endpoint transition order and deterministic receive-to-machine mapping.
+
+### 3.7 — Receive error behavior
+
+| Result | Runtime behavior | Rationale |
+| --- | --- | --- |
+| `protocolViolation` | **Throw `ProtocolViolation`** | The inbound label is not admitted by the current endpoint state. |
+| `unknownAction` | **Throw** | The receive mapping has no entry for the label. Configuration error. |
+| `machineFailure` | **Return `false`** | The mapped action's guards failed or no candidates exist. |
+| `success` | **Return `true`** | |
 
 ## 4 — Replay and draft semantics
 
@@ -333,6 +367,17 @@ The **publication sequence** of a committed trace is the subsequence of boundary
 ### 4.8 — Receive-aware commit semantics
 
 Root commit for traces containing receive steps updates internal semantic state by replaying recorded successful steps. It does **not** claim republication, revalidation, or external-world persistence of recorded receive events. The commit soundness theorem is about snapshot equality, not external observation.
+
+### 4.9 — Subscription policy
+
+The boundary service delegates `subscribe(...)` to the underlying EFSM service. Subscription behavior follows:
+
+1. During root commit replay, the underlying EFSM service fires subscriber callbacks with the standard EFSM change record (§3.5 of `lean/README.md`: `{ state, context, action }`).
+2. Subscribers do **not** receive endpoint-state, event-kind, or protocol-label information in the change record.
+3. The boundary service exposes `endpointState` as a read-only property. A subscriber may query it synchronously within its callback to observe the post-transition endpoint state.
+4. Boundary drafts do not expose `subscribe(...)`, consistent with the EFSM draft subscription policy (§4.13 of `lean/README.md`).
+
+A future version may introduce a protocol-aware change record that includes `endpointState`, `eventKind`, and `protocolLabel`. This is explicitly deferred.
 
 ## 5 — Protocol-boundary properties
 
@@ -554,28 +599,65 @@ Normalization exists to:
 - make control flow explicit,
 - provide the intermediate representation that projection operates over.
 
-### 9.2 — Rules
+### 9.2 — Normalization accumulator
 
-Normalization maps source protocol syntax to graph components. The entry node for each recursive call is the graph node at which that syntax fragment begins.
+Normalization threads an accumulator through the recursive descent:
 
-- `done` → marks the entry node as terminal. No outgoing edges.
-- `interact(ι, next)` → allocates a fresh target node, adds an interaction edge from entry to target, then normalizes `next` from the target.
+```text
+NormState = {
+  nextId    : Nat,           -- next fresh node ID
+  nodes     : List<Nat>,     -- allocated node IDs, in allocation order
+  edges     : List<GraphEdge>, -- accumulated edges, in creation order
+  terminals : List<Nat>      -- nodes marked as terminal
+}
+```
+
+The `freshNode` operation allocates a new node:
+
+```text
+freshNode(st) → (st.nextId, { st with
+  nextId := st.nextId + 1,
+  nodes  := st.nodes ++ [st.nextId] })
+```
+
+The initial state before normalization begins:
+
+```text
+(initNode, st₀) = freshNode({ nextId: 0, nodes: [], edges: [], terminals: [] })
+```
+
+This produces `initNode = 0` with `st₀.nextId = 1`.
+
+### 9.3 — Rules
+
+Normalization maps source protocol syntax to graph components. The entry node for each recursive call is the graph node at which that syntax fragment begins. The accumulator `st` and a loop map `loopMap : List<(Nat, Nat)>` are threaded through each call.
+
+- `done` → marks the entry node as terminal: `st.terminals ++ [entryNode]`. No outgoing edges.
+- `interact(ι, next)` → allocates a fresh target node via `freshNode(st)`, adds an interaction edge `(entryNode, interaction(ι), nextNode)` to `st.edges`, then normalizes `next` from `nextNode`.
 - `choice(chooser, [])` → marks the entry node as terminal.
-- `choice(chooser, (label, body) :: rest)` → allocates a fresh branch node, adds a branch edge from entry to branch node, normalizes `body` from the branch node, then normalizes `choice(chooser, rest)` from the same entry node.
+- `choice(chooser, (label, body) :: rest)` → allocates a fresh branch node via `freshNode(st)`, adds a branch edge `(entryNode, branch(chooser, label), branchNode)` to `st.edges`, normalizes `body` from `branchNode`, then normalizes `choice(chooser, rest)` from the same entry node.
 - `loop(loopId, body)` → registers `(loopId, entryNode)` in the loop map, then normalizes `body` from the same entry node.
-- `continueLoop(loopId)` → if `loopId` is found in the loop map, adds a branch edge from entry to the registered target. If not found, marks entry as terminal.
+- `continueLoop(loopId)` → if `loopId` is found in the loop map, adds a branch edge `(entryNode, branch(0, loopId), targetNode)` to `st.edges`. If not found, marks entry as terminal.
 
-### 9.3 — Interaction-target freshness
+### 9.4 — Interaction-target freshness
 
 Each interaction edge's target is allocated with an ID strictly above all previously used IDs. This structural invariant ensures that interaction-edge targets never collide with nodes from earlier normalization steps.
 
-### 9.4 — Determinism
+### 9.5 — Determinism
 
 Normalization is deterministic for fixed input and fixed identifier strategy.
 
-### 9.5 — Graph construction
+### 9.6 — Graph construction
 
-After normalization, `buildGraph` validates well-formedness (non-empty nodes, nodup, initial membership, terminal subset, edge validity). If validation fails, normalization returns `none`, and projection rejects with `nonFiniteStateProtocol`.
+After normalization, `buildGraph` validates well-formedness in the following order:
+
+1. `st.nodes ≠ []` — at least one node was allocated.
+2. `initNode ∈ st.nodes` — the initial node is among the allocated nodes.
+3. `st.nodes.Nodup` — all node IDs are distinct.
+4. `terminalsValid(st.terminals, st.nodes)` — every terminal is a declared node.
+5. `edgesValid(st.edges, st.nodes)` — every edge source and target is a declared node.
+
+If any check fails, `buildGraph` returns `none`, and projection rejects with `nonFiniteStateProtocol`.
 
 ## 10 — Projection semantics
 
@@ -585,38 +667,123 @@ For role `r` and interaction `ι = (id, sender, receiver, message)`:
 
 - `r = sender` ⟹ projected label has `direction = send`, `peer = receiver`
 - `r = receiver` ⟹ projected label has `direction = receive`, `peer = sender`
-- otherwise ⟹ no endpoint transition for `r`
+- otherwise ⟹ no endpoint transition for `r` (the edge is **silent** for `r`)
 
-### 10.2 — State construction
+### 10.2 — Projection accumulator
 
-Endpoint states are derived from canonical role-local control positions induced by the normalized graph.
+Projection for a single role `r` is a left fold over `g.edges` in declaration order, threading a `ProjState` accumulator:
 
-Multiple graph nodes may map to the same endpoint state when they differ only by **role-silent control flow** — branch edges and uninvolved interaction edges that do not produce local events for `r`. This collapse preserves the role-local trace set.
+```text
+ProjState = {
+  nextStateId : Nat,                  -- next endpoint state ID to allocate
+  states      : List<Nat>,            -- allocated endpoint state IDs
+  transitions : List<EndpointTransition>, -- generated endpoint transitions
+  nextTransId : Nat,                  -- next transition ID to allocate
+  nodeToState : Map<Nat, Nat>         -- graph node → endpoint state ID
+}
+```
 
-### 10.3 — Transition construction
+The `getOrCreateState` operation ensures a graph node has an endpoint state assignment:
 
-For each role-relevant interaction edge in the normalized graph, projection creates one endpoint transition with:
+```text
+getOrCreateState(ps, globalNode) → (stateId, ps') :=
+  if ps.nodeToState has globalNode → (existing stateId, ps unchanged)
+  else →
+    let sid = ps.nextStateId
+    (sid, { ps with
+      nextStateId := ps.nextStateId + 1,
+      states      := ps.states ++ [sid],
+      nodeToState := ps.nodeToState ∪ { globalNode → sid } })
+```
 
-- `source` = the endpoint state for the pre-step role-local position,
-- `target` = the endpoint state for the post-step role-local position,
-- `label` = the generated protocol label for role `r`,
-- `id` = a deterministic transition identifier.
+### 10.3 — Initial projection state
 
-Transitions preserve declaration order.
+For a normalized graph with initial node `n₀`, the projection fold begins with:
 
-### 10.4 — Silent-edge handling
+```text
+projInit(n₀) = {
+  nextStateId : 1,
+  states      : [0],
+  transitions : [],
+  nextTransId : 0,
+  nodeToState : { n₀ → 0 }
+}
+```
 
-Branch edges and uninvolved interaction edges are **silent** for role `r`. The projector ensures their source and target map to the same endpoint state. This is validated by a confluence check: for every silent edge, the source and target have equal endpoint-state assignments.
+Endpoint state `0` is the initial state, assigned to the graph's initial node. Subsequent states receive monotonically increasing IDs starting at `1`.
 
-### 10.5 — Initial state
+### 10.4 — Projection step function
+
+The fold processes each edge `e = (source, label, target)` against the current `ProjState`:
+
+**Case 1 — Relevant interaction.** If `e.label = interaction(ι)` and `r ∈ {ι.sender, ι.receiver}`:
+
+1. `(srcState, ps₁) = getOrCreateState(ps, e.source)`
+2. `(tgtState, ps₂) = getOrCreateState(ps₁, e.target)`
+3. Construct the protocol label:
+
+```text
+label = {
+  id        := ι.id,
+  direction := if ι.sender == r then send else receive,
+  peer      := if ι.sender == r then ι.receiver else ι.sender,
+  message   := ι.message
+}
+```
+
+4. Construct the endpoint transition:
+
+```text
+trans = {
+  id     := ps₂.nextTransId,
+  source := srcState,
+  label  := label,
+  target := tgtState
+}
+```
+
+5. Append `trans` to `ps₂.transitions` and increment `ps₂.nextTransId`.
+
+**Case 2 — Uninvolved interaction.** If `e.label = interaction(ι)` and `r ∉ {ι.sender, ι.receiver}`:
+
+1. `(_, ps₁) = getOrCreateState(ps, e.source)`
+2. If `e.target` already has a mapping in `ps₁.nodeToState` → no change.
+3. If `e.target` has no mapping → look up `e.source` in `ps₁.nodeToState`. If found with state ID `sid`, assign `e.target → sid` in `nodeToState`. If not found (unreachable after step 1), no change.
+
+**Case 3 — Branch edge.** If `e.label = branch(chooser, branchLabel)`:
+
+1. `(srcState, ps₁) = getOrCreateState(ps, e.source)`
+2. If `e.target` already has a mapping in `ps₁.nodeToState` → no change.
+3. If `e.target` has no mapping → assign `e.target → srcState` in `nodeToState`.
+
+The distinction between Case 2 and Case 3: branch edges propagate the `getOrCreateState` return value (`srcState`); uninvolved-interaction edges propagate the `nodeToState` lookup on the source. The difference matters when a source node's state was assigned via silent-edge copying rather than by `getOrCreateState`.
+
+### 10.5 — Transition and state identity
+
+- **State IDs** are assigned in first-encounter order during the edge fold, starting from `0` for the initial node. The scheme is a monotonic `Nat` counter.
+- **Transition IDs** are assigned in edge-fold encounter order, starting from `0`. The scheme is a monotonic `Nat` counter.
+- **Label IDs** are inherited from the source interaction: `label.id := ι.id`.
+
+An alternative implementation may use a different ID scheme if it preserves PJ1 (determinism) and the identity commitments in §12.
+
+### 10.6 — Confluence check
+
+After the fold completes, a post-fold confluence check validates that silent edges were handled correctly. For each edge `e` in `g.edges`:
+
+- Either `e` is a relevant interaction for role `r` (sender or receiver equals `r`), or
+- `nodeToState[e.source] == nodeToState[e.target]`.
+
+The check runs within `projectRole`, after the fold and before endpoint-automaton construction. If it fails, `projectRole` returns `none`, and the pipeline emits `rejection(nonProjectableChoice)`.
+
+### 10.7 — Initial state
 
 The projected endpoint automaton for each role begins at endpoint state `0`, corresponding to the normalized graph's initial node.
 
-### 10.6 — Rejection
+### 10.8 — Rejection
 
 If any fragment predicate fails, or if the confluence check fails for any role, projection returns `rejection(reason)`. No partial output is produced.
 
-### 10.7 — Pipeline
+### 10.9 — Pipeline
 
 `projectProtocol` implements the full pipeline:
 
