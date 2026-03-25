@@ -122,7 +122,7 @@ export type StateMachineContextGroupConflicts<P extends StateMachineBuilderModel
   StateMachineGroups<P>
 >
 
-type StateMachineCompositionsAtState<T> = T extends {
+export type StateMachineCompositionsAtState<T> = T extends {
   __compositions: infer C extends Array<{
     group: StateMachineIdentifierState
     machine: StateMachineInterface
