@@ -119,20 +119,8 @@ export type StateMachineCompoundContext<
 
 export type StateMachineContextGroupConflicts<P extends StateMachineBuilderModel, U> = Extract<
   keyof StateMachineBaseContext<U>,
-  StateMachineExistingGroups<P>
+  StateMachineGroups<P>
 >
-
-export type StateMachineComposeContextConflict<
-  P extends StateMachineBuilderModel,
-  G extends StateMachineIdentifierState,
-> = G extends keyof StateMachineBaseContext<P['state']['context']> ? G : never
-
-// Preserve composed child slices when `.context(...)` replaces the parent-own context.
-// Group-name collisions are rejected separately; non-conflicting own keys replace only matching
-// parent-own keys, while all composed child slices and other own keys are retained.
-export type StateMachineChildModelOf<M extends StateMachineInterface> = InferStateMachineModel<M>
-export type StateMachineChildStateOf<M extends StateMachineInterface> =
-  StateMachineChildModelOf<M>['state']
 
 type StateMachineCompositionsAtState<T> = T extends {
   __compositions: infer C extends Array<{
@@ -143,11 +131,8 @@ type StateMachineCompositionsAtState<T> = T extends {
   ? $.Values<C>
   : never
 
-export type StateMachineComposeLogEntries<P extends StateMachineBuilderModel> =
-  StateMachineCompositionsAtState<P['state']>
-
-export type StateMachineExistingGroups<P extends StateMachineBuilderModel> =
-  StateMachineComposeLogEntries<P> extends infer U
+export type StateMachineGroups<P extends StateMachineBuilderModel> =
+  StateMachineCompositionsAtState<P['state']> extends infer U
     ? U extends { group: infer G }
       ? G
       : never
@@ -158,9 +143,9 @@ export type StateMachineActionPayloadsAtState<S> = S extends { __actionPayloads:
   : {}
 
 export type StateMachineComposedChildActions<P extends StateMachineBuilderModel> =
-  StateMachineComposeLogEntries<P> extends infer U
+  StateMachineCompositionsAtState<P['state']> extends infer U
     ? U extends { machine: infer M extends StateMachineInterface }
-      ? StateMachineActions<StateMachineChildModelOf<M>>
+      ? StateMachineActions<InferStateMachineModel<M>>
       : never
     : never
 
@@ -170,7 +155,7 @@ export type StateMachineComposeSharedActions<
   P extends StateMachineBuilderModel,
   M extends StateMachineInterface,
 > = Exclude<
-  Extract<StateMachineActions<P>, StateMachineActions<StateMachineChildModelOf<M>>>,
+  Extract<StateMachineActions<P>, StateMachineActions<InferStateMachineModel<M>>>,
   StateMachineComposedChildActions<P>
 >
 
@@ -180,9 +165,9 @@ export type StateMachineComposePayloadConflict<
   M extends StateMachineInterface,
 > = {
   [K in StateMachineComposeSharedActions<P, M>]: [StateMachineActionPayload<P, K>] extends [
-    StateMachineActionPayload<StateMachineChildModelOf<M>, K>,
+    StateMachineActionPayload<InferStateMachineModel<M>, K>,
   ]
-    ? [StateMachineActionPayload<StateMachineChildModelOf<M>, K>] extends [
+    ? [StateMachineActionPayload<InferStateMachineModel<M>, K>] extends [
         StateMachineActionPayload<P, K>,
       ]
       ? never
@@ -194,17 +179,17 @@ export type StateMachineComposePrecondition<
   P extends StateMachineBuilderModel,
   G extends StateMachineIdentifierState,
   M extends StateMachineInterface,
-> = G extends StateMachineExistingGroups<P> | StateMachineStates<P>
+> = G extends StateMachineGroups<P> | StateMachineStates<P>
   ? never
-  : [StateMachineComposeContextConflict<P, G>] extends [never]
-    ? [Extract<StateMachineStates<P>, StateMachineStates<StateMachineChildModelOf<M>>>] extends [
+  : [G extends keyof StateMachineBaseContext<P['state']['context']> ? G : never] extends [never]
+    ? [Extract<StateMachineStates<P>, StateMachineStates<InferStateMachineModel<M>>>] extends [
         never,
       ]
       ? // Reject if child actions overlap any previously composed sibling's actions
         [
           Extract<
             StateMachineComposedChildActions<P>,
-            StateMachineActions<StateMachineChildModelOf<M>>
+            StateMachineActions<InferStateMachineModel<M>>
           >,
         ] extends [never]
         ? // Reject if parent/child overlapping actions have incompatible payloads
@@ -227,9 +212,7 @@ export type StateMachineBuilderReducer<
         infer C
       >
         ? {
-            __actionPayloads: $.Prettify<
-              $.Assign<StateMachineActionPayloadsAtState<T>, { [K in A]: C }>
-            >
+            __actionPayloads: $.Assign<StateMachineActionPayloadsAtState<T>, { [K in A]: C }>
             actions: $.Cons<A, T['actions']>
           }
         : never
@@ -238,23 +221,21 @@ export type StateMachineBuilderReducer<
         infer M
       >
         ? {
-            __actionPayloads: $.Prettify<
-              $.Assign<
-                StateMachineActionPayloadsAtState<T>,
-                StateMachineActionPayloadsAtState<StateMachineChildStateOf<M>>
-              >
+            __actionPayloads: $.Assign<
+              StateMachineActionPayloadsAtState<T>,
+              StateMachineActionPayloadsAtState<InferStateMachineModel<M>['state']>
             >
             __compositions: $.Cons<
               { group: G; machine: M },
               T extends { __compositions: infer C extends any[] } ? C : []
             >
-            actions: $.Concat<T['actions'], StateMachineChildStateOf<M>['actions']>
+            actions: $.Concat<T['actions'], InferStateMachineModel<M>['state']['actions']>
             context: StateMachineCompoundContext<
               T['context'],
               G,
-              StateMachineChildStateOf<M>['context']
+              InferStateMachineModel<M>['state']['context']
             >
-            states: $.Concat<T['states'], StateMachineChildStateOf<M>['states']>
+            states: $.Concat<T['states'], InferStateMachineModel<M>['state']['states']>
           }
         : never
       [StateMachineBuilderActionType.Context]: {
@@ -307,15 +288,17 @@ export type StateMachineBuilderStage<
 export type StateMachineActions<T extends StateMachineBuilderModel> = $.Values<
   T['state']['actions']
 >
-export type StateMachineGroups<T extends StateMachineBuilderModel> = StateMachineExistingGroups<T>
 export type StateMachineStates<T extends StateMachineBuilderModel> = $.Values<T['state']['states']>
 
 export type StateMachineActionPayload<
   T extends StateMachineBuilderModel,
   U extends StateMachineActions<T>,
-> = U extends keyof StateMachineActionPayloadsAtState<T['state']>
-  ? StateMachineActionPayloadsAtState<T['state']>[U]
-  : never
+> =
+  StateMachineActionPayloadsAtState<T['state']> extends infer AP
+    ? U extends keyof AP
+      ? AP[U]
+      : never
+    : never
 
 type StateMachineTransitionsAtState<T> = T extends {
   __transitions: infer Tr extends Array<{
@@ -327,20 +310,15 @@ type StateMachineTransitionsAtState<T> = T extends {
   ? $.Values<Tr>
   : never
 
-export type StateMachineTransitionPayloadsOwn<T extends StateMachineBuilderModel> =
-  StateMachineTransitionsAtState<T['state']>
-
-export type StateMachineTransitionPayloadsComposed<T extends StateMachineBuilderModel> = [
-  StateMachineComposeLogEntries<T>,
-] extends [never]
-  ? never
-  : StateMachineComposeLogEntries<T> extends { machine: infer M extends StateMachineInterface }
-    ? StateMachineTransitionPayloads<StateMachineChildModelOf<M>>
-    : never
-
 export type StateMachineTransitionPayloads<T extends StateMachineBuilderModel> =
-  | StateMachineTransitionPayloadsComposed<T>
-  | StateMachineTransitionPayloadsOwn<T>
+  | (StateMachineCompositionsAtState<T['state']> extends infer E
+      ? [E] extends [never]
+        ? never
+        : E extends { machine: infer M extends StateMachineInterface }
+          ? StateMachineTransitionPayloads<InferStateMachineModel<M>>
+          : never
+      : never)
+  | StateMachineTransitionsAtState<T['state']>
 
 export interface StateMachineChangeByTransition<
   T extends StateMachineBuilderModel,
@@ -452,11 +430,8 @@ export interface StateMachineAction<
   type: B
 }
 
-export type StateMachineContextAtState<Context, State> = [
-  Extract<Context, { state: State }>,
-] extends [never]
-  ? Context
-  : Extract<Context, { state: State }>
+export type StateMachineContextAtState<Context, State> =
+  Extract<Context, { state: State }> extends infer E ? ([E] extends [never] ? Context : E) : never
 
 export type StateMachinePredicate<
   T extends StateMachineBuilderModel,
