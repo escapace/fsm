@@ -106,17 +106,22 @@ describe('./src/__tests__/index.spec.ts', () => {
     )
 
   it('api', () => {
-    const turnstile = interpret(machine)
+    const finalizedMachine = machine.done()
+    const turnstile = interpret(finalizedMachine)
 
-    assert.hasAllKeys(machine, ['compose', 'transition', STATE_MACHINE_STATE])
-    assert.containsAllKeys(turnstile, ['state', 'do', 'subscribe', 'context'])
+    assert.hasAllKeys(machine, ['compose', 'done', 'transition'])
+    assert.hasAllKeys(finalizedMachine, [STATE_MACHINE_STATE])
+
+    for (const key of ['state', 'do', 'subscribe', 'context']) {
+      assert.property(turnstile, key)
+    }
   })
 
   it('happy path', () => {
     spyTransition.mockReset()
     spyObservable.mockReset()
 
-    const turnstile = interpret(machine)
+    const turnstile = interpret(machine.done())
 
     const unsubscribe = turnstile.subscribe((value) => {
       spyObservable(cloneDeep(value))
@@ -527,7 +532,7 @@ describe('./src/__tests__/index.spec.ts', () => {
       )
     // Note: No transition defined for TestAction.Undefined
 
-    const testService = interpret(testMachine)
+    const testService = interpret(testMachine.done())
 
     // Test case 1: Valid transition with no predicate - should return true
     assert.equal(testService.state, TestState.StateA)
@@ -540,7 +545,7 @@ describe('./src/__tests__/index.spec.ts', () => {
     )
 
     // Reset to StateA for remaining tests
-    const resetMachine = interpret(testMachine)
+    const resetMachine = interpret(testMachine.done())
 
     // Test case 2: Transition with failing predicate - should return false
     const neverResult = resetMachine.do(TestAction.Never)
@@ -561,7 +566,7 @@ describe('./src/__tests__/index.spec.ts', () => {
     assert.equal(resetMachine.state, TestState.StateB, 'State should change when predicate passes')
 
     // Reset again for final test
-    const resetMachine2 = interpret(testMachine)
+    const resetMachine2 = interpret(testMachine.done())
 
     // Test case 4: Transition with failing predicate - should return false
     const conditionalFalseResult = resetMachine2.do(TestAction.Conditional, { shouldPass: false })
@@ -641,20 +646,25 @@ describe('./src/__tests__/index.spec.ts', () => {
         .transition(TypeState.Unlocked, TypeAction.Push, TypeState.Locked),
     )
 
-    assert.throws(() =>
-      interpret(
+    assert.throws(() => {
+      const service = interpret(
         stateMachine()
           .state(TypeState.Unlocked)
           .initial(TypeState.Unlocked)
           .action(TypeAction.Push)
-          .transition(TypeState.Unlocked, TypeAction.Push, TypeState.Unlocked),
-        // @ts-expect-error
-      ).do(TypeAction.Coin),
-    )
+          .transition(TypeState.Unlocked, TypeAction.Push, TypeState.Unlocked)
+          .done(),
+      )
+
+      // @ts-expect-error intentionally dispatching an undeclared action for runtime validation
+      service.do(TypeAction.Coin)
+    })
 
     assert.throws(() =>
-      // @ts-expect-error
-      interpret(stateMachine().state(TypeState.Unlocked)),
+      interpret(
+        // @ts-expect-error finalized definitions without initial are rejected by types
+        stateMachine().state(TypeState.Unlocked).done(),
+      ),
     )
   })
 })

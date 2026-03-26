@@ -1,6 +1,6 @@
 import { cloneDeep } from 'es-toolkit'
 import { bench, describe } from 'vitest'
-import { reconcileContext, snapshotContext } from '../src/context-runtime'
+import { reconcile, snapshot } from '../src/context-runtime'
 
 const BATCH_SIZE = 250
 const INPUT_COUNT = 64
@@ -327,13 +327,13 @@ const snapshotInputs = Array.from({ length: INPUT_COUNT }, (_, index) =>
 )
 
 const baselineSnapshotBatch = createSnapshotBatchRunner(structuredClone, snapshotInputs)
-const runtimeSnapshotBatch = createSnapshotBatchRunner(snapshotContext, snapshotInputs)
+const runtimeSnapshotBatch = createSnapshotBatchRunner(snapshot, snapshotInputs)
 const baselineReconcileBatch = createReconcileBatchRunner(
   (_current, next) => cloneDeep(next),
   createReconcileSlots(),
 )
 const runtimeReconcileBatch = createReconcileBatchRunner(
-  (current, next) => reconcileContext(current, next),
+  (current, next) => reconcile(current, next),
   createReconcileSlots(),
 )
 
@@ -342,12 +342,12 @@ warmup(runtimeSnapshotBatch)
 warmup(baselineReconcileBatch)
 warmup(runtimeReconcileBatch)
 
-describe('context runtime throughput - snapshotContext', () => {
+describe('context runtime throughput - snapshot', () => {
   bench(`baseline structuredClone x${BATCH_SIZE}`, baselineSnapshotBatch, { iterations: 1000 })
-  bench(`snapshotContext x${BATCH_SIZE}`, runtimeSnapshotBatch, { iterations: 1000 })
+  bench(`snapshot x${BATCH_SIZE}`, runtimeSnapshotBatch, { iterations: 1000 })
 })
 
-describe('context runtime throughput - reconcileContext', () => {
+describe('context runtime throughput - reconcile', () => {
   bench(`baseline cloneDeep(next) x${BATCH_SIZE}`, baselineReconcileBatch, { iterations: 1000 })
-  bench(`reconcileContext x${BATCH_SIZE}`, runtimeReconcileBatch, { iterations: 1000 })
+  bench(`reconcile x${BATCH_SIZE}`, runtimeReconcileBatch, { iterations: 1000 })
 })

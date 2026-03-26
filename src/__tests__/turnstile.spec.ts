@@ -77,7 +77,7 @@ describe('Turnstile State Machine', () => {
       )
     // No transition for Push when Locked - tests line 122-123
 
-    const turnstile = interpret(machine)
+    const turnstile = interpret(machine.done())
 
     // Test guard condition failure
     guardSpy.mockClear()
@@ -142,7 +142,7 @@ describe('Turnstile State Machine', () => {
         }),
       )
 
-    const turnstile = interpret(machine)
+    const turnstile = interpret(machine.done())
 
     // First guard fails, second should not be evaluated
     guard1Spy.mockClear()

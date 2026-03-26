@@ -13,7 +13,7 @@
     "@escapace/pnpm-pack": "0.8.0",
     "@escapace/syncpack-configuration": "0.1.0",
     "@ls-lint/ls-lint": "2.3.1",
-    "@vitest/coverage-v8": "4.1.2",
+    "@vitest/coverage-v8": "4.0.18",
     "@xstate/fsm": "2.1.0",
     "alien-deepsignals": "0.3.1",
     "eslint": "10.1.0",
@@ -27,7 +27,9 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.1.2",
-    "vue": "3.5.31"
+    "vue": "3.5.31",
+    "xstate": "5.28.0",
+    "yay-machine": "1.5.0"
   },
   "engines": {
     "pnpm": ">=10.29.2"
@@ -59,11 +61,13 @@
   "scripts": {
     "bench": "vitest bench --run",
     "build": "tsx scripts/build.ts",
+    "compare:perf": "tsx scripts/compare-perf.ts",
     "format": "syncpack format && eslint --no-warn-ignored --fix && prettier --no-error-on-unmatched-pattern -uw .",
     "lint": "ls-lint --config .ls-lint.yaml && knip --no-config-hints && eslint",
     "ls-lint": "ls-lint --config .ls-lint.yaml",
     "pack": "pnpm-pack package --pack-destination lib",
     "prepare": "lefthook install",
+    "profile": "tsx scripts/profile.ts",
     "syncpack": "syncpack fix && syncpack format",
     "test": "vitest --no-watch --coverage",
     "typecheck": "tsc --noEmit",

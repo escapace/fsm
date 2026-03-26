@@ -47,7 +47,7 @@ const createAppMachine = () =>
 
 describe('state injection: service.do()', () => {
   it('context.state matches service.state after transition', () => {
-    const svc = interpret(createAppMachine())
+    const svc = interpret(createAppMachine().done())
     assert.equal(svc.state, 'Loading')
     assert.equal(svc.context.state, 'Loading')
 
@@ -57,7 +57,7 @@ describe('state injection: service.do()', () => {
   })
 
   it('context.state correct through multiple transitions', () => {
-    const svc = interpret(createAppMachine())
+    const svc = interpret(createAppMachine().done())
 
     svc.do('Fail')
     assert.equal(svc.state, 'Error')
@@ -71,7 +71,7 @@ describe('state injection: service.do()', () => {
   })
 
   it('self-transition preserves context.state', () => {
-    const svc = interpret(createAppMachine())
+    const svc = interpret(createAppMachine().done())
 
     svc.do('Progress', 50)
     assert.equal(svc.state, 'Loading')
@@ -80,7 +80,7 @@ describe('state injection: service.do()', () => {
   })
 
   it('subscribe callback sees correct context.state', () => {
-    const svc = interpret(createAppMachine())
+    const svc = interpret(createAppMachine().done())
     const changes: Array<{ ctxState: string; state: string }> = []
 
     svc.subscribe((change) => {
@@ -129,7 +129,7 @@ describe('state injection: no-reducer transition', () => {
         state: 'Idle' as const,
       }))
 
-    const svc = interpret(machine)
+    const svc = interpret(machine.done())
     assert.equal(svc.context.state, 'Idle')
 
     svc.do('Activate')
@@ -156,7 +156,7 @@ const createDraftMachine = () =>
 
 describe('state injection: draft.do()', () => {
   it('draft context.state updated after speculative transition', () => {
-    const svc = interpret(createDraftMachine())
+    const svc = interpret(createDraftMachine().done())
     const draft = svc.draft()
 
     assert.equal(draft.context.state, 'Loading')
@@ -173,7 +173,7 @@ describe('state injection: draft.do()', () => {
   })
 
   it('context.state correct after draft commit', () => {
-    const svc = interpret(createDraftMachine())
+    const svc = interpret(createDraftMachine().done())
     const draft = svc.draft()
 
     draft.do('Finish')
@@ -184,7 +184,7 @@ describe('state injection: draft.do()', () => {
   })
 
   it('nested draft maintains context.state', () => {
-    const svc = interpret(createDraftMachine())
+    const svc = interpret(createDraftMachine().done())
     const d1 = svc.draft()
     const d2 = d1.draft()
 
@@ -215,7 +215,8 @@ describe('state injection: draft commit replay', () => {
           () => ({ a: 1, state: 'A' as const }),
         )
         .transition('A', 'Next', 'B', () => ({ b: 2, state: 'B' as const }))
-        .transition('B', 'Next', 'C', () => ({ c: 3, state: 'C' as const })),
+        .transition('B', 'Next', 'C', () => ({ c: 3, state: 'C' as const }))
+        .done(),
     )
 
     const changes: string[] = []
@@ -258,13 +259,13 @@ describe('state injection: composition', () => {
 
     const parent = stateMachine()
       .state('Idle')
-      .compose('device', child)
+      .compose('device', child.done())
       .initial('On')
       .action<'Enter'>('Enter')
       .context(() => ({ label: 'test' }))
       .transition('Idle', 'Enter', 'On')
 
-    const svc = interpret(parent)
+    const svc = interpret(parent.done())
 
     // Child starts in 'On' state
     const deviceContext = () => svc.context.device
@@ -301,13 +302,13 @@ describe('state injection: composition', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('c', child)
+      .compose('c', child.done())
       .initial('CA')
       .action<'Go'>('Go')
       .context(() => ({ y: 2 }))
       .transition('Root', 'Go', 'CA')
 
-    const svc = interpret(parent)
+    const svc = interpret(parent.done())
 
     const childContext = () => svc.context.c
     assert.equal(childContext().state, 'CA')
@@ -329,7 +330,7 @@ describe('flat context: injection is no-op', () => {
       .transition('A', 'Go', 'B', (context) => ({ count: context.count + 1 }))
       .transition('B', 'Go', 'A', (context) => ({ count: context.count + 1 }))
 
-    const svc = interpret(machine)
+    const svc = interpret(machine.done())
     svc.do('Go')
     assert.deepEqual(svc.context, { count: 1 })
     assert.equal('state' in svc.context, false)
@@ -354,7 +355,7 @@ describe('context factory validation', () => {
       }))
 
     // Should not throw
-    const svc = interpret(machine)
+    const svc = interpret(machine.done())
     assert.equal(svc.context.state, 'Loading')
   })
 
@@ -374,7 +375,7 @@ describe('context factory validation', () => {
       }))
 
     try {
-      interpret(machine)
+      interpret(machine.done())
       assert.fail('Expected ContextStateMismatch error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
@@ -394,7 +395,7 @@ describe('context factory validation', () => {
       .transition('A', 'Go', 'B')
 
     // Should not throw — no state key to validate
-    const svc = interpret(machine)
+    const svc = interpret(machine.done())
     assert.deepEqual(svc.context, { count: 0 })
   })
 
@@ -407,7 +408,7 @@ describe('context factory validation', () => {
       .transition('A', 'Go', 'B')
 
     // No context factory — should not throw
-    const svc = interpret(machine)
+    const svc = interpret(machine.done())
     assert.equal(svc.context, undefined)
   })
 })

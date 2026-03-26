@@ -18,7 +18,7 @@
  * sides use the same enum type.
  */
 
-import { interpret, reconcileContext, stateMachine } from '../src/index'
+import { interpret, reconcile, stateMachine } from '../src/index'
 
 // ── States and actions ──────────────────────────────────────────────
 
@@ -176,7 +176,7 @@ export function createPinInputMachine(config: PinInputConfig) {
         PinInputAction.Focus,
         PinInputState.Focused,
         (context, action) =>
-          reconcileContext(context, {
+          reconcile(context, {
             config: context.config,
             focusedIndex: Math.max(0, Math.min(action.payload.index, context.config.length - 1)),
             state: PinInputState.Focused as const,
@@ -217,7 +217,7 @@ export function createPinInputMachine(config: PinInputConfig) {
           const newValues = [...context.values]
           newValues[index] = value
 
-          return reconcileContext(context, {
+          return reconcile(context, {
             config: context.config,
             focusedIndex: index,
             state: PinInputState.Completed as const,
@@ -267,7 +267,7 @@ export function createPinInputMachine(config: PinInputConfig) {
         ],
         PinInputState.Error,
         (context, action) =>
-          reconcileContext(context, {
+          reconcile(context, {
             config: context.config,
             error: `Invalid ${context.config.type} input: "${action.payload.value}"`,
             focusedIndex: context.focusedIndex,
@@ -293,7 +293,7 @@ export function createPinInputMachine(config: PinInputConfig) {
             newValues = new Array<string>(context.config.length).fill('')
           }
 
-          return reconcileContext(context, {
+          return reconcile(context, {
             config: context.config,
             focusedIndex: index ?? 0,
             state: PinInputState.Focused as const,
@@ -334,7 +334,7 @@ export function createPinInputMachine(config: PinInputConfig) {
 
           const nextIndex = Math.min(startIndex + chars.length - 1, context.config.length - 1)
 
-          return reconcileContext(context, {
+          return reconcile(context, {
             config: context.config,
             focusedIndex: nextIndex,
             state: PinInputState.Focused as const,
@@ -445,7 +445,7 @@ export function createPinInputMachine(config: PinInputConfig) {
         PinInputAction.Blur,
         PinInputState.Idle,
         (context) =>
-          reconcileContext(context, {
+          reconcile(context, {
             config: context.config,
             focusedIndex: -1 as const,
             state: PinInputState.Idle as const,
@@ -461,7 +461,7 @@ export function createPinInputMachine(config: PinInputConfig) {
         PinInputAction.Reset,
         PinInputState.Idle,
         (context) => {
-          const value = reconcileContext(context, {
+          const value = reconcile(context, {
             config: context.config,
             focusedIndex: -1 as const,
             state: PinInputState.Idle as const,
@@ -475,5 +475,5 @@ export function createPinInputMachine(config: PinInputConfig) {
 }
 
 export function createPinInput(config: PinInputConfig) {
-  return interpret(createPinInputMachine(config))
+  return interpret(createPinInputMachine(config).done())
 }

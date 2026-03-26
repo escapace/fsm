@@ -23,7 +23,7 @@ describe('compose build-order edge cases', () => {
       .initial('Idle')
       .action<'Start'>('Start')
       .context(() => ({ starts: 0 }))
-      .compose('power', child)
+      .compose('power', child.done())
       .transition('Idle', 'Start', 'On')
 
     type Model = InferStateMachineModel<typeof parent>
@@ -34,7 +34,7 @@ describe('compose build-order edge cases', () => {
 
     check<Equal<Model['state']['context'], ExpectedContext>>()
 
-    const service = interpret(parent)
+    const service = interpret(parent.done())
     check<Equal<typeof service.context, ExpectedContext>>()
 
     assert.deepEqual(service.context, {
@@ -70,11 +70,11 @@ describe('compose build-order edge cases', () => {
 
     const parent = stateMachine()
       .state('Idle')
-      .compose('left', childA)
+      .compose('left', childA.done())
       .initial('Idle')
       .action<'EnterLeft'>('EnterLeft')
       .context(() => ({ root: 1 }))
-      .compose('right', childB)
+      .compose('right', childB.done())
       .action<'EnterRight'>('EnterRight')
       .transition('Idle', 'EnterLeft', 'A1')
       .transition('Idle', 'EnterRight', 'B1')
@@ -88,7 +88,7 @@ describe('compose build-order edge cases', () => {
 
     check<Equal<Model['state']['context'], ExpectedContext>>()
 
-    const service = interpret(parent)
+    const service = interpret(parent.done())
     check<Equal<typeof service.context, ExpectedContext>>()
 
     assert.deepEqual(service.context, {
@@ -129,15 +129,15 @@ describe('compose build-order edge cases', () => {
         parentCalls += 1
         return { p: 0 }
       })
-      .compose('child', child)
+      .compose('child', child.done())
       .transition('Idle', 'Start', 'C')
 
-    const service1 = interpret(machine)
+    const service1 = interpret(machine.done())
     assert.deepEqual(service1.context, { child: { c: 0 }, p: 0 })
     assert.equal(parentCalls, 1)
     assert.equal(childCalls, 1)
 
-    const service2 = interpret(machine)
+    const service2 = interpret(machine.done())
     assert.deepEqual(service2.context, { child: { c: 0 }, p: 0 })
     assert.equal(parentCalls, 2)
     assert.equal(childCalls, 2)

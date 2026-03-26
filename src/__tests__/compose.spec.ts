@@ -20,7 +20,7 @@ describe('compose', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('power', child)
+      .compose('power', child.done())
       .initial('Idle')
       .action('Start')
       .action('Stop')
@@ -28,13 +28,13 @@ describe('compose', () => {
       .transition('Idle', 'Start', 'On', (context) => ({ ...context, starts: 1 }))
       .transition(['On', 'Off'], 'Stop', 'Idle')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.equal(service.state, 'Idle')
     assert.equal(service.do('Start'), true)
     assert.equal(service.state, 'On')
 
-    const states = machine[STATE_MACHINE_STATE].states as string[]
+    const states = machine.done()[STATE_MACHINE_STATE].states as string[]
     assert.equal(states.includes('power'), false)
     assert.equal(states.includes('On'), true)
     assert.equal(states.includes('Off'), true)
@@ -64,13 +64,13 @@ describe('compose', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('child', child)
+      .compose('child', child.done())
       .initial('Idle')
       .action('Enter')
       .context(() => ({ parent: 41 }))
       .transition('Idle', 'Enter', 'ChildA')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.equal(service.do('Enter'), true)
     assert.equal(service.state, 'ChildA')
@@ -96,12 +96,12 @@ describe('compose', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('child', child)
+      .compose('child', child.done())
       .initial('Idle')
       .action('Enter')
       .transition('Idle', 'Enter', 'ChildA')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.deepEqual(service.context, {
       child: { value: 0 },
@@ -125,12 +125,12 @@ describe('compose', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('child', child)
+      .compose('child', child.done())
       .initial('Idle')
       .action('Enter')
       .transition('Idle', 'Enter', 'ChildA')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.deepEqual(service.context, {
       child: undefined,
@@ -156,14 +156,14 @@ describe('compose', () => {
 
     const machine = stateMachine()
       .state('Root')
-      .compose('child', child)
+      .compose('child', child.done())
       .initial('Root')
       .action('Enter')
       .context(ownContext)
       .transition('Root', 'Enter', 'ChildA')
 
     try {
-      interpret(machine)
+      interpret(machine.done())
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
@@ -190,11 +190,11 @@ describe('compose', () => {
       .initial('Root')
       .action('Enter')
       .context(ownContext)
-      .compose('child', child)
+      .compose('child', child.done())
       .transition('Root', 'Enter', 'ChildA')
 
     try {
-      interpret(machine)
+      interpret(machine.done())
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
@@ -218,7 +218,7 @@ describe('compose', () => {
 
     const middle = stateMachine()
       .state('MiddleIdle')
-      .compose('leaf', leaf)
+      .compose('leaf', leaf.done())
       .initial('MiddleIdle')
       .action('EnterLeaf')
       .context(() => ({ m: 0 }))
@@ -226,13 +226,13 @@ describe('compose', () => {
 
     const root = stateMachine()
       .state('RootIdle')
-      .compose('middle', middle)
+      .compose('middle', middle.done())
       .initial('RootIdle')
       .action('EnterMiddle')
       .context(() => ({ r: 0 }))
       .transition('RootIdle', 'EnterMiddle', 'MiddleIdle')
 
-    const service = interpret(root)
+    const service = interpret(root.done())
 
     assert.equal(service.do('EnterMiddle'), true)
     assert.equal(service.state, 'MiddleIdle')
@@ -259,12 +259,12 @@ describe('compose', () => {
 
     assert.throws(() => {
       // @ts-expect-error state 'A' in child conflicts with parent state 'A'
-      stateMachine().state('A').compose('x', child)
+      stateMachine().state('A').compose('x', child.done())
     })
 
     assert.throws(() => {
       // @ts-expect-error group 'x' conflicts with parent state 'x'
-      stateMachine().state('x').compose('x', child)
+      stateMachine().state('x').compose('x', child.done())
     })
   })
 
@@ -275,16 +275,19 @@ describe('compose', () => {
       .action('Go')
       .transition('A', 'Go', 'A')
 
-    ;(childWithoutInitial[STATE_MACHINE_STATE] as { initial?: unknown }).initial = undefined
+    const finalizedChildWithoutInitial = childWithoutInitial.done()
+
+    ;(finalizedChildWithoutInitial[STATE_MACHINE_STATE] as { initial?: unknown }).initial =
+      undefined
 
     const machine = stateMachine()
       .state('Root')
-      .compose('child', childWithoutInitial)
+      .compose('child', finalizedChildWithoutInitial)
       .initial('Root')
       .action('Enter')
       .transition('Root', 'Enter', 'A')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     assert.equal(service.do('Enter'), true)
     assert.equal(service.state, 'A')
   })
@@ -305,9 +308,9 @@ describe('compose', () => {
     try {
       stateMachine()
         .state('Root')
-        .compose('a', childA)
+        .compose('a', childA.done())
         // @ts-expect-error sibling action overlap
-        .compose('b', childB)
+        .compose('b', childB.done())
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
@@ -330,12 +333,74 @@ describe('compose', () => {
       .state('P')
       .initial('P')
       .action('Shared')
-      .compose('g', child)
+      .compose('g', child.done())
       .transition('P', 'Shared', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     assert.equal(service.do('Shared'), true)
     assert.equal(service.state, 'C')
+  })
+
+  it('locks child slice replacement during child-owned draft replay', () => {
+    const child = stateMachine()
+      .state('ChildA')
+      .state('ChildB')
+      .initial('ChildA')
+      .action('STEP')
+      .context(() => ({ childOwned: false as boolean, n: 0, overwritten: false as boolean }))
+      .transition('ChildA', 'STEP', 'ChildB', (context) => ({
+        childOwned: context.childOwned,
+        n: context.n + 1,
+        overwritten: context.overwritten,
+      }))
+
+    const parent = stateMachine()
+      .state('Idle')
+      .compose(
+        'child',
+        child.done({
+          reconcileContext: (_parentContext, nextContext) => ({
+            ...nextContext,
+            childOwned: true,
+          }),
+        }),
+      )
+      .initial('Idle')
+      .action('ENTER')
+      .context(() => ({ parent: 0, parentPublished: false }))
+      .transition('Idle', 'ENTER', 'ChildA')
+
+    const service = interpret(
+      parent.done({
+        reconcileContext: (_parentContext, nextContext) => ({
+          ...nextContext,
+          child: { childOwned: false, n: 999, overwritten: true },
+          parentPublished: true,
+        }),
+      }),
+    )
+
+    assert.equal(service.do('ENTER'), true)
+
+    const draft = service.draft()
+    assert.equal(draft.do('STEP'), true)
+    draft.commit()
+
+    assert.deepEqual(service.context, {
+      child: { childOwned: true, n: 1, overwritten: false },
+      parent: 0,
+      parentPublished: true,
+    })
+  })
+
+  it('done() returns a detached snapshot when the builder advances later', () => {
+    const builder = stateMachine().state('A').initial('A').action('Go')
+    const finalized = builder.done()
+
+    builder.transition('A', 'Go', 'A')
+
+    assert.deepEqual(finalized[STATE_MACHINE_STATE].states, ['A'])
+    assert.equal(finalized[STATE_MACHINE_STATE].transitionEntries.length, 0)
   })
 
   it('rejects malformed child machine with not-state-machine error', () => {

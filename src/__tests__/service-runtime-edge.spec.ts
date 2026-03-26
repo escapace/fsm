@@ -12,7 +12,7 @@ describe('service runtime edge semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const seen: string[] = []
 
     let unsubscribeB: () => void = noop
@@ -38,7 +38,7 @@ describe('service runtime edge semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const seen: string[] = []
 
     service.subscribe(() => {
@@ -64,7 +64,7 @@ describe('service runtime edge semantics', () => {
       .transition('A', 'FIRST', 'B')
       .transition('B', 'SECOND', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const seen: string[] = []
 
     service.subscribe((change) => {

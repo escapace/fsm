@@ -414,7 +414,7 @@ describe('Pin Input State Machine', () => {
   describe('State Change Subscriptions', () => {
     it('notifies subscribers of state changes', () => {
       const machine = createPinInputMachine(defaultConfig)
-      const pinInput = interpret(machine)
+      const pinInput = interpret(machine.done())
       const changes: Array<{ action: string; from: string; to: string }> = []
 
       const unsubscribe = pinInput.subscribe((change) => {

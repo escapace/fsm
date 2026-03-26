@@ -21,7 +21,7 @@ describe('draft retention and lifecycle behavior', () => {
         'B',
       )
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.throws(() => service.do('STEP'), failure)
     assert.equal(service.state, 'A')
@@ -46,7 +46,7 @@ describe('draft retention and lifecycle behavior', () => {
         'B',
       )
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.throws(() => draft.do('STEP'), failure)
@@ -66,7 +66,7 @@ describe('draft retention and lifecycle behavior', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     let draftNotifications = 0
@@ -90,7 +90,7 @@ describe('draft retention and lifecycle behavior', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     const spy = vi.fn()
@@ -123,7 +123,7 @@ describe('draft retention and lifecycle behavior', () => {
       .context(() => ({ n: 0 }))
       .transition('A', 'STEP', 'B', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.throws(() => service.do('STEP'), failure)
     assert.equal(service.state, 'A')
@@ -152,7 +152,7 @@ describe('draft retention and lifecycle behavior', () => {
       .context(() => ({ n: 0 }))
       .transition('A', 'STEP', 'B', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.throws(() => draft.do('STEP'), failure)
@@ -183,7 +183,7 @@ describe('draft retention and lifecycle behavior', () => {
       .context(() => ({ n: 0 }))
       .transition('A', 'STEP', 'B', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('STEP'), true)
@@ -216,7 +216,7 @@ describe('draft retention and lifecycle behavior', () => {
       .context(() => ({ n: 0 }))
       .transition('A', 'STEP', 'B', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -258,7 +258,7 @@ describe('draft retention and lifecycle behavior', () => {
       .transition('A', 'STEP', 'B', reducer)
       .transition('B', 'STEP', 'C', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 

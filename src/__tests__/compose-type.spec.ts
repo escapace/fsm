@@ -32,7 +32,7 @@ describe('compose type-level', () => {
 
   const composed = stateMachine()
     .state('Idle')
-    .compose('power', child)
+    .compose('power', child.done())
     .initial('Idle')
     .action<'Start'>('Start')
     .context(() => ({ starts: 0 }))
@@ -74,7 +74,7 @@ describe('compose type-level', () => {
 
   // ── Happy path: service types match ───────────────────────────────
   it('interpreted service context matches model context', () => {
-    const service = interpret(composed)
+    const service = interpret(composed.done())
     type ServiceContext = typeof service.context
     interface Expected {
       power: { toggles: number }
@@ -84,13 +84,20 @@ describe('compose type-level', () => {
   })
 
   it('service.do accepts parent and child actions', () => {
-    const service = interpret(composed)
+    const service = interpret(composed.done())
     service.do('Start')
     service.do('Toggle')
   })
 
+  it('rejects unfinished child builders for compose at compile time', () => {
+    void (() => {
+      // @ts-expect-error compose requires a finalized child definition
+      stateMachine().state('Root').compose('child', child)
+    })
+  })
+
   it('subscribe callback exposes composed change types', () => {
-    const service = interpret(composed)
+    const service = interpret(composed.done())
 
     const unsubscribe = service.subscribe((change) => {
       interface ExpectedContext {
@@ -111,7 +118,7 @@ describe('compose type-level', () => {
   })
 
   it('draft.subscribe callback exposes composed change types', () => {
-    const service = interpret(composed)
+    const service = interpret(composed.done())
     const draft = service.draft()
 
     const unsubscribe = draft.subscribe((change) => {
@@ -135,7 +142,7 @@ describe('compose type-level', () => {
   it('parent guard sees composed context and parent action type', () => {
     const machine = stateMachine()
       .state('Idle')
-      .compose('power', child)
+      .compose('power', child.done())
       .initial('Idle')
       .action<'Start'>('Start')
       .context(() => ({ starts: 0 }))
@@ -160,7 +167,7 @@ describe('compose type-level', () => {
       )
 
     // compile-time only: creation must type-check with the guard signature
-    interpret(machine)
+    interpret(machine.done())
   })
 
   // ── Happy path: typed action payload from child ──────────────────
@@ -174,7 +181,7 @@ describe('compose type-level', () => {
 
     const withTypedChild = stateMachine()
       .state('Root')
-      .compose('tc', typedChild)
+      .compose('tc', typedChild.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'X')
@@ -208,12 +215,12 @@ describe('compose type-level', () => {
 
     const machine = stateMachine()
       .state('Root')
-      .compose('tc', typedChild)
+      .compose('tc', typedChild.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'X')
 
-    interpret(machine)
+    interpret(machine.done())
   })
 
   it('subscribe callback narrows payload by action discriminator', () => {
@@ -226,12 +233,12 @@ describe('compose type-level', () => {
 
     const machine = stateMachine()
       .state('Root')
-      .compose('tc', typedChild)
+      .compose('tc', typedChild.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'X')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     service.subscribe((change) => {
       if (change.action.type === 'Typed') {
@@ -256,7 +263,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('left', left)
+      .compose('left', left.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'L')
@@ -326,7 +333,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('g', childA)
+      .compose('g', childA.done())
       .initial('Root')
       .action<'Y'>('Y')
 
@@ -354,7 +361,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('g', childA)
+      .compose('g', childA.done())
       .initial('Root')
       .action<'Y'>('Y')
 
@@ -369,7 +376,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('g', childA)
+      .compose('g', childA.done())
       .initial('Root')
       .action<'Y'>('Y')
       .transition('Root', 'Y', 'A')
@@ -395,7 +402,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('num', childNumber)
+      .compose('num', childNumber.done())
       .initial('Root')
       .action<'Y'>('Y')
       .transition('Root', 'Y', 'N')
@@ -420,7 +427,7 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('a', childA)
+      .compose('a', childA.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'A')
@@ -457,8 +464,8 @@ describe('compose type-level', () => {
 
     const parent = stateMachine()
       .state('Root')
-      .compose('a', childA)
-      .compose('b', childB)
+      .compose('a', childA.done())
+      .compose('b', childB.done())
       .initial('Root')
       .action<'Go'>('Go')
       .transition('Root', 'Go', 'A')

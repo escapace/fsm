@@ -119,7 +119,7 @@ describe('Traffic Light State Machine', () => {
         }),
       )
 
-    const trafficLight = interpret(machine)
+    const trafficLight = interpret(machine.done())
 
     // Initial state
     assert.equal(trafficLight.state, TrafficLightState.Red)
@@ -181,7 +181,7 @@ describe('Traffic Light State Machine', () => {
         }),
       )
 
-    const trafficLight = interpret(machine)
+    const trafficLight = interpret(machine.done())
 
     // Start in Green
     assert.equal(trafficLight.state, TrafficLightState.Green)
@@ -217,7 +217,7 @@ describe('Traffic Light State Machine', () => {
       .transition(TrafficLightState.Green, TrafficLightAction.Timer, TrafficLightState.Yellow)
       .transition(TrafficLightState.Yellow, TrafficLightAction.Timer, TrafficLightState.Red)
 
-    const trafficLight = interpret(machine)
+    const trafficLight = interpret(machine.done())
 
     const unsubscribe = trafficLight.subscribe((change) => {
       stateChanges.push(`${change.action.source} → ${change.state}`)
@@ -278,7 +278,7 @@ describe('Traffic Light State Machine', () => {
         }),
       )
 
-    const trafficLight = interpret(machine)
+    const trafficLight = interpret(machine.done())
 
     // Simulate automatic timing
     const scheduleTransition = (delay: number) => {
@@ -318,7 +318,7 @@ describe('Traffic Light State Machine', () => {
       .transition(TrafficLightState.Red, TrafficLightAction.Timer, TrafficLightState.Green)
     // Note: No transition from Green back to Red
 
-    const trafficLight = interpret(machine)
+    const trafficLight = interpret(machine.done())
 
     assert.equal(trafficLight.state, TrafficLightState.Red)
 

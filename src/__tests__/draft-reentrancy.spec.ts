@@ -18,7 +18,7 @@ describe('draft reentrancy and callback mutation semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -50,7 +50,7 @@ describe('draft reentrancy and callback mutation semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -79,7 +79,7 @@ describe('draft reentrancy and callback mutation semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 

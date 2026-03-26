@@ -434,7 +434,6 @@ These errors are raised during machine construction (builder calls), not during 
 | `commit()` on a closed draft                      | Throws `DraftClosed`         |
 | `discard()` on a closed draft                     | Throws `DraftClosed`         |
 | `commit()` when parent cursor ≠ `baseCursor`      | Throws `DraftCommitConflict` |
-| `draft()` when `structuredClone` fails on context | Throws `DraftSnapshotFailed` |
 
 ## 9 — Properties for Lean verification
 

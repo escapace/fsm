@@ -19,7 +19,7 @@ describe('interpret hydration', () => {
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: { count: 1 },
         state: 'B',
@@ -41,7 +41,7 @@ describe('interpret hydration', () => {
       .transition('A', 'STEP', 'A')
 
     try {
-      interpret(machine, {
+      interpret(machine.done(), {
         hydrate: {
           context: undefined,
           state: 'Z' as never,
@@ -67,7 +67,7 @@ describe('interpret hydration', () => {
       .transition('A', 'STEP', 'B', () => ({ state: 'B' as const, value: 1 }))
 
     try {
-      interpret(machine, {
+      interpret(machine.done(), {
         hydrate: {
           context: { state: 'A' as const, value: 10 },
           state: 'B',
@@ -94,7 +94,7 @@ describe('interpret hydration', () => {
       .context(contextFactory)
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: { count: 9 },
         state: 'B',
@@ -114,7 +114,7 @@ describe('interpret hydration', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: undefined,
         state: 'B',
@@ -132,7 +132,7 @@ describe('interpret hydration', () => {
       .action('STEP')
       .transition('A', 'STEP', 'A')
 
-    const service = interpret(machine, 1 as never)
+    const service = interpret(machine.done(), 1 as never)
 
     assert.equal(service.state, 'A')
     assert.equal(service.do('STEP'), true)
@@ -146,7 +146,7 @@ describe('interpret hydration', () => {
       .action('STEP')
       .transition('A', 'STEP', 'A')
 
-    const service = interpret(machine, { hydrate: undefined })
+    const service = interpret(machine.done(), { hydrate: undefined })
 
     assert.equal(service.state, 'A')
     assert.equal(service.do('STEP'), true)
@@ -159,7 +159,7 @@ describe('interpret hydration', () => {
       .action('STEP')
       .transition('A', 'STEP', 'A')
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: undefined,
         state: 'A',
@@ -181,7 +181,7 @@ describe('interpret hydration', () => {
       hydrate?: unknown
     }
 
-    const service = interpret(machine, options as never)
+    const service = interpret(machine.done(), options as never)
 
     assert.equal(service.state, 'A')
   })
@@ -203,7 +203,7 @@ describe('interpret hydration', () => {
 
     for (const options of cases) {
       try {
-        interpret(machine, options as never)
+        interpret(machine.done(), options as never)
         assert.fail('expected HydrationShapeMismatch')
       } catch (error) {
         assert.equal(isStateMachineError(error), true)
@@ -227,7 +227,7 @@ describe('interpret hydration', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('power', child)
+      .compose('power', child.done())
       .initial('Idle')
       .action('Start')
       .context(() => ({ starts: 0 }))
@@ -236,7 +236,7 @@ describe('interpret hydration', () => {
         starts: context.starts + 1,
       }))
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: { power: { toggles: 2 }, starts: 5 },
         state: 'On',
@@ -262,7 +262,7 @@ describe('interpret hydration', () => {
       .transition('A', 'STEP', 'B', (context) => ({ n: context.n + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: { n: 1 },
         state: 'B',
@@ -287,7 +287,7 @@ describe('interpret hydration', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: undefined,
         state: 'A',
@@ -325,7 +325,7 @@ describe('interpret hydration', () => {
       .transition('A', 'FIRST', 'B')
       .transition('B', 'SECOND', 'C')
 
-    const service = interpret(machine, {
+    const service = interpret(machine.done(), {
       hydrate: {
         context: undefined,
         state: 'A',
@@ -351,5 +351,97 @@ describe('interpret hydration', () => {
 
     assert.equal(service.do('FIRST'), true)
     assert.deepEqual(seen, ['B', 'C'])
+  })
+
+  it('uses custom snapshotContext when creating drafts', () => {
+    const snapshotContext = vi.fn((context: unknown) => ({
+      ...(context as { count: number }),
+      draftOnly: true,
+    }))
+
+    const machine = stateMachine()
+      .state('A')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'A', (context) => ({ count: context.count + 1 }))
+
+    const finalized = machine.done({ snapshotContext })
+    const service = interpret(finalized)
+    const draft = service.draft()
+
+    assert.equal(snapshotContext.mock.calls.length, 1)
+    assert.deepEqual(snapshotContext.mock.calls[0], [service.context])
+    assert.equal((draft.context as { count: number }).count, 0)
+    assert.equal((draft.context as Record<string, unknown>).draftOnly, true)
+    assert.deepEqual(service.context, { count: 0 })
+  })
+
+  it('uses custom reconcileContext during draft commit replay only', () => {
+    const reconcileContext = vi.fn((_parentContext: unknown, nextContext: unknown) => ({
+      ...(nextContext as { count: number }),
+      committed: true,
+    }))
+
+    const machine = stateMachine()
+      .state('A')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'A', (context) => ({ count: context.count + 1 }))
+
+    const finalized = machine.done({ reconcileContext })
+    const service = interpret(finalized)
+    const draft = service.draft()
+
+    assert.equal(draft.do('STEP'), true)
+    draft.commit()
+
+    assert.equal(reconcileContext.mock.calls.length, 1)
+    assert.equal((service.context as { count: number }).count, 1)
+    assert.equal((service.context as Record<string, unknown>).committed, true)
+
+    assert.equal(service.do('STEP'), true)
+    assert.equal(reconcileContext.mock.calls.length, 1)
+    assert.deepEqual(service.context, { count: 2 })
+  })
+
+  it('ignores prototype-inherited snapshotContext and reconcileContext done options', () => {
+    const machine = stateMachine()
+      .state('A')
+      .initial('A')
+      .action('STEP')
+      .context(() => ({ count: 0 }))
+      .transition('A', 'STEP', 'A', (context) => ({ count: context.count + 1 }))
+
+    const doneOptions = Object.create({
+      reconcileContext: () => ({ count: 999 }),
+      snapshotContext: () => ({ count: 999 }),
+    }) as {
+      reconcileContext?: unknown
+      snapshotContext?: unknown
+    }
+
+    const service = interpret(machine.done(doneOptions as never))
+    const draft = service.draft()
+
+    assert.deepEqual(draft.context, { count: 0 })
+    assert.equal(draft.do('STEP'), true)
+    draft.commit()
+    assert.deepEqual(service.context, { count: 1 })
+  })
+
+  it('rejects non-state-machine inputs with StateMachineExpected', () => {
+    try {
+      // eslint-disable-next-line typescript/consistent-type-assertions
+      interpret({} as never)
+      assert.fail('expected StateMachineExpected')
+    } catch (error) {
+      assert.equal(isStateMachineError(error), true)
+      assert.equal(
+        isStateMachineErrorOfType(error as StateMachineError, 'StateMachineExpected'),
+        true,
+      )
+    }
   })
 })

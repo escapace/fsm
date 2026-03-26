@@ -8,7 +8,6 @@ export const STATE_MACHINE_ERROR_TYPES = [
   'ContextStateMismatch',
   'ContextGroupConflict',
   'DraftClosed',
-  'DraftSnapshotFailed',
   'DraftCommitConflict',
   'GroupNameConflict',
   'HydrationShapeMismatch',
@@ -32,7 +31,6 @@ export interface StateMachineErrorMetadata {
   // eslint-disable-next-line typescript/no-empty-object-type
   DraftClosed: {}
   DraftCommitConflict: { actualCursor: number; expectedCursor: number }
-  DraftSnapshotFailed: { message?: string }
 
   GroupNameConflict: { identifier: StateMachineIdentifier }
 
@@ -71,10 +69,6 @@ function formatMessage(cause: StateMachineErrorCause): string {
       return 'Draft is closed or has a closed ancestor.'
     case 'DraftCommitConflict':
       return `Draft commit failed because the parent runtime advanced since draft creation (expected cursor ${cause.expectedCursor}, got ${cause.actualCursor}).`
-    case 'DraftSnapshotFailed':
-      return typeof cause.message === 'string'
-        ? `Draft snapshot failed: ${cause.message}`
-        : 'Draft snapshot failed because the current context could not be cloned.'
     case 'GroupNameConflict':
       return `Group name ${formatIdentifier(cause.identifier)} conflicts with an existing group or declared state.`
     case 'HydrationShapeMismatch':

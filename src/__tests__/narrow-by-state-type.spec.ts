@@ -244,7 +244,7 @@ describe('composition narrowing', () => {
   it('flat parent + flat child: no narrowing, no regression', () => {
     const parent = stateMachine()
       .state('Idle')
-      .compose('power', child)
+      .compose('power', child.done())
       .initial('Idle')
       .action<'Start'>('Start')
       .context(() => ({ starts: 0 }))

@@ -1,7 +1,7 @@
 import { assert, describe, it } from 'vitest'
 import {
   interpret,
-  reconcileContext,
+  reconcile,
   stateMachine,
   type InferStateMachineModel,
   type StateMachineContextAtState,
@@ -194,7 +194,7 @@ describe('pin-input-discriminated: type-level', () => {
         PinInputState.Idle,
         (context) =>
           // @ts-expect-error reducer for Idle target must return Idle context variant
-          reconcileContext(context, {
+          reconcile(context, {
             config: context.config,
             focusedIndex: -1 as const,
             state: PinInputState.Completed as const,
@@ -208,7 +208,7 @@ describe('pin-input-discriminated: type-level', () => {
       createPinInputMachine({
         length: 4,
         type: 'numeric',
-      }),
+      }).done(),
     )
 
     service.subscribe((change) => {
@@ -229,7 +229,7 @@ describe('pin-input-discriminated: type-level', () => {
       createPinInputMachine({
         length: 4,
         type: 'numeric',
-      }),
+      }).done(),
     )
 
     service.do(PinInputAction.Focus, { index: 0 })
@@ -502,7 +502,7 @@ describe('pin-input-discriminated: runtime', () => {
 
   describe('subscriptions', () => {
     it('notifies subscribers with correct context.state', () => {
-      const svc = interpret(createPinInputMachine(defaultConfig))
+      const svc = interpret(createPinInputMachine(defaultConfig).done())
       const seen: Array<{ contextState: PinInputState; state: PinInputState }> = []
 
       svc.subscribe((change) => {

@@ -117,7 +117,7 @@ describe('Assembly Line State Machine', () => {
         }),
       )
 
-    const assemblyLine = interpret(machine)
+    const assemblyLine = interpret(machine.done())
 
     // Line starts waiting for parts
     assert.equal(assemblyLine.state, AssemblyState.WaitingForPart)
@@ -215,7 +215,7 @@ describe('Assembly Line State Machine', () => {
         }),
       )
 
-    const assemblyLine = interpret(machine)
+    const assemblyLine = interpret(machine.done())
 
     // Process part through first three stations
     assemblyLine.do(AssemblyAction.PartArrived)
@@ -261,7 +261,7 @@ describe('Assembly Line State Machine', () => {
       )
     // No direct transition from LoadingStation to WeldComplete
 
-    const assemblyLine = interpret(machine)
+    const assemblyLine = interpret(machine.done())
 
     // Part arrives
     assemblyLine.do(AssemblyAction.PartArrived)

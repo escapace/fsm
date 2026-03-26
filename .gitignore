@@ -47,6 +47,7 @@
 bower_components
 build/Release
 coverage
+.firecrawl/
 dist
 .firecrawl/
 jspm_packages/
@@ -62,3 +63,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 web_modules/
 yarn-debug.log*
 yarn-error.log*
+perf/profiles/

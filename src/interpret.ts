@@ -1,22 +1,21 @@
 /* eslint-disable unicorn/prevent-abbreviations */
 
-import type $ from '@escapace/typelevel'
-import { remove, szudzik } from 'coastal'
+import { remove, szudzik, type DirectAddressTable } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
-import { reconcileContext, snapshotContext } from './context-runtime'
-import { isObject } from './is-object'
+import { STATE_MACHINE_STATE } from './constants'
+import { reconcile, snapshot } from './context-runtime'
 import { StateMachineError } from './error'
-import {
-  STATE_MACHINE_STATE,
-  type InferStateMachineModel,
-  type StateMachineChange,
-  type StateMachineDraft,
-  type StateMachineDraftStatus,
-  type StateMachineIdentifier,
-  type StateMachineInterpretOptions,
-  type StateMachineInterface,
-  type StateMachineService,
-  type StateMachineSubscription,
+import { resolveOwnOption } from './internal-options'
+import { CHILD_GROUP, type GroupScopedReducer } from './internal-policy'
+import { isObject } from './is-object'
+import type {
+  InferStateMachineModel,
+  StateMachineDraftStatus,
+  StateMachineIdentifier,
+  StateMachineInterface,
+  StateMachineInterpretable,
+  StateMachineInterpretOptions,
+  StateMachineService,
 } from './types'
 
 interface InternalAction {
@@ -26,149 +25,411 @@ interface InternalAction {
   type: StateMachineIdentifier
 }
 
-type InternalReducer = ((context: unknown, action: unknown) => unknown) | undefined
-
-interface InternalActionBuffer {
-  payload: unknown
-  source: StateMachineIdentifier | undefined
-  target: StateMachineIdentifier | undefined
-  type: StateMachineIdentifier | undefined
+type InternalActionBuffer = {
+  [K in keyof InternalAction]: InternalAction[K] | undefined
 }
+
+type InternalReducer = ((context: unknown, action: unknown) => unknown) | undefined
 
 interface InternalSelectedStep {
   action: InternalAction
   reducer: InternalReducer
 }
 
-type InternalSubscription = (change: unknown) => void
-
-interface InternalDraftFrame {
-  baseCursor: number
-  children: Set<InternalDraftFrame> | undefined
-  closed: boolean
+interface InternalChangeBuffer {
+  action: unknown
   context: unknown
-  indexState: number
-  parent: InternalDraftFrame | undefined
-  state: StateMachineIdentifier
-  subscriptions: InternalSubscription[] | undefined
-  trace: InternalSelectedStep[]
+  state: unknown
 }
 
-const draftHeadCursor = (draft: InternalDraftFrame): number => draft.baseCursor + draft.trace.length
+const createChangeBuffer = (): InternalChangeBuffer => ({
+  action: undefined,
+  context: undefined,
+  state: undefined,
+})
 
-const inspectDraftLiveness = (draft: InternalDraftFrame): 'closed' | 'open' => {
-  let cursor: InternalDraftFrame | undefined = draft
+const createActionBuffer = (): InternalActionBuffer => ({
+  payload: undefined,
+  source: undefined,
+  target: undefined,
+  type: undefined,
+})
 
-  while (cursor !== undefined) {
-    if (cursor.closed) {
+type InternalSubscription = (change: unknown) => void
+
+type InternalReconcileContext = (parentContext: unknown, nextContext: unknown) => unknown
+type InternalSnapshotContext = (context: unknown) => unknown
+
+const DEFAULT_SNAPSHOT_CONTEXT: InternalSnapshotContext = snapshot
+const DEFAULT_RECONCILE_CONTEXT: InternalReconcileContext = reconcile
+
+type TransitionCandidates = Array<{
+  predicates: Array<(...args: unknown[]) => boolean>
+  reducer: InternalReducer
+  source: StateMachineIdentifier
+  target: StateMachineIdentifier
+}>
+
+type TransitionTable = DirectAddressTable<TransitionCandidates>
+
+abstract class AbstractDispatcher {
+  protected readonly actionBuffer = createActionBuffer()
+  protected readonly changeBuffer = createChangeBuffer()
+  context: unknown
+  indexState: number
+  readonly indiceActions: Record<StateMachineIdentifier, number>
+  readonly indiceStates: Record<StateMachineIdentifier, number>
+  readonly needsStateInjection: boolean
+  readonly reconcileContext: InternalReconcileContext
+  replayCursor: number
+  readonly snapshotContext: InternalSnapshotContext
+  state: StateMachineIdentifier
+  protected readonly subscriptions: InternalSubscription[] = []
+  readonly transitionMap: TransitionTable
+
+  constructor(
+    indiceActions: Record<StateMachineIdentifier, number>,
+    indiceStates: Record<StateMachineIdentifier, number>,
+    needsStateInjection: boolean,
+    transitionMap: TransitionTable,
+    reconcileContext: InternalReconcileContext,
+    snapshotContext: InternalSnapshotContext,
+    context: unknown,
+    state: StateMachineIdentifier,
+    indexState: number,
+    replayCursor = 0,
+  ) {
+    this.indiceActions = indiceActions
+    this.indiceStates = indiceStates
+    this.needsStateInjection = needsStateInjection
+    this.transitionMap = transitionMap
+    this.reconcileContext = reconcileContext
+    this.snapshotContext = snapshotContext
+    this.context = context
+    this.state = state
+    this.indexState = indexState
+    this.replayCursor = replayCursor
+  }
+
+  protected notifyChange(change: unknown): void {
+    const subs = this.subscriptions
+    for (let i = 0; i < subs.length; i++) {
+      subs[i](change)
+    }
+  }
+
+  subscribe(subscription: InternalSubscription): () => void {
+    if (!this.subscriptions.includes(subscription)) {
+      this.subscriptions.push(subscription)
+    }
+
+    return () => {
+      remove(this.subscriptions, (value) => value === subscription)
+    }
+  }
+
+  protected resolveTransition(
+    action: StateMachineIdentifier,
+    payload: unknown,
+  ): { reducer: InternalReducer; target: StateMachineIdentifier } | undefined {
+    this.actionBuffer.payload = payload
+    this.actionBuffer.source = undefined
+    this.actionBuffer.target = undefined
+    this.actionBuffer.type = action
+    const indexAction = this.indiceActions[action]
+
+    if (indexAction === undefined) {
+      throw new StateMachineError({ identifier: action, type: 'ActionNotDeclared' })
+    }
+
+    const transitions = this.transitionMap.get(szudzik(this.indexState, indexAction))
+
+    if (transitions === undefined) {
+      return undefined
+    }
+
+    candidateLoop: for (let i = 0; i < transitions.length; i++) {
+      const candidate = transitions[i]
+
+      this.actionBuffer.source = candidate.source
+      this.actionBuffer.target = candidate.target
+
+      const predicates = candidate.predicates
+
+      for (let j = 0; j < predicates.length; j++) {
+        if (
+          !(predicates[j] as (ctx: unknown, act: unknown) => boolean)(
+            this.context,
+            this.actionBuffer,
+          )
+        ) {
+          continue candidateLoop
+        }
+      }
+
+      return candidate
+    }
+
+    return undefined
+  }
+
+  protected applyTransitionAndAdvance(reducer: InternalReducer): void {
+    if (reducer !== undefined) {
+      this.context = reducer(this.context, this.actionBuffer)
+    }
+
+    const nextState = this.actionBuffer.target!
+    this.state = nextState
+    this.indexState = this.indiceStates[nextState]
+
+    if (this.needsStateInjection) {
+      ;(this.context as Record<string, unknown>).state = this.state
+    }
+
+    this.replayCursor += 1
+  }
+
+  protected applyCommitStep(step: InternalSelectedStep): void {
+    const nextState = step.action.target
+
+    if (step.reducer !== undefined) {
+      const reducer = step.reducer as GroupScopedReducer
+      const childGroup = reducer[CHILD_GROUP]
+      const nextContext = reducer(this.context, step.action)
+
+      if (childGroup === undefined) {
+        this.context = this.reconcileContext(this.context, nextContext)
+      } else {
+        const childSlice = (nextContext as Record<StateMachineIdentifier, unknown>)[childGroup]
+        const reconciledContext = this.reconcileContext(this.context, nextContext)
+
+        ;(reconciledContext as Record<StateMachineIdentifier, unknown>)[childGroup] = childSlice
+        this.context = reconciledContext
+      }
+    }
+
+    this.state = nextState
+    this.indexState = this.indiceStates[nextState]
+
+    if (this.needsStateInjection) {
+      ;(this.context as Record<string, unknown>).state = this.state
+    }
+  }
+
+  protected assignSelfChange(action: unknown): void {
+    this.changeBuffer.action = action
+    this.changeBuffer.context = this.context
+    this.changeBuffer.state = this.state
+  }
+
+  protected emitSelfChange(action: unknown): void {
+    this.assignSelfChange(action)
+    this.notifyChange(this.changeBuffer)
+  }
+}
+
+class ServiceRuntime extends AbstractDispatcher {
+  replayStep(step: InternalSelectedStep): void {
+    this.applyCommitStep(step)
+    this.replayCursor += 1
+    this.emitSelfChange(step.action)
+  }
+
+  do(action: StateMachineIdentifier, payload: unknown): boolean {
+    const transition = this.resolveTransition(action, payload)
+
+    if (transition === undefined) {
+      return false
+    }
+
+    this.applyTransitionAndAdvance(transition.reducer)
+
+    this.emitSelfChange(this.actionBuffer)
+
+    return true
+  }
+
+  draft(): DraftRuntime {
+    return new DraftRuntime(this)
+  }
+}
+
+class DraftRuntime extends AbstractDispatcher {
+  private readonly baseCursor: number
+  private children: Set<DraftRuntime> | undefined
+  private closed = false
+  private parent: DraftRuntime | ServiceRuntime | undefined
+  private readonly service: ServiceRuntime
+  private readonly trace: InternalSelectedStep[] = []
+
+  constructor(parent: DraftRuntime | ServiceRuntime) {
+    const baseCursor = parent.replayCursor
+
+    super(
+      parent.indiceActions,
+      parent.indiceStates,
+      parent.needsStateInjection,
+      parent.transitionMap,
+      parent.reconcileContext,
+      parent.snapshotContext,
+      parent.snapshotContext(parent.context),
+      parent.state,
+      parent.indexState,
+      baseCursor,
+    )
+
+    this.parent = parent
+    this.baseCursor = baseCursor
+
+    if (parent instanceof ServiceRuntime) {
+      this.service = parent
+      return
+    }
+
+    this.service = parent.service
+    ;(parent.children ?? (parent.children = new Set())).add(this)
+  }
+
+  replayStep(step: InternalSelectedStep): void {
+    this.applyCommitStep(step)
+    this.trace.push(step)
+    this.replayCursor += 1
+    this.emitSelfChange(step.action)
+  }
+
+  private assertOperational(): void {
+    if (this.closed || this.parent === undefined) {
+      throw new StateMachineError({ type: 'DraftClosed' })
+    }
+  }
+
+  status(): StateMachineDraftStatus {
+    const parent = this.parent
+
+    if (this.closed || parent === undefined) {
       return 'closed'
     }
 
-    cursor = cursor.parent
+    return parent.replayCursor === this.baseCursor ? 'open' : 'stale'
   }
 
-  return 'open'
-}
-
-const assertDraftOperational = (draft: InternalDraftFrame): void => {
-  if (inspectDraftLiveness(draft) === 'closed') {
-    throw new StateMachineError({ type: 'DraftClosed' })
-  }
-}
-
-const notifySubscribers = (
-  subscriptions: InternalSubscription[] | undefined,
-  change: unknown,
-): void => {
-  if (subscriptions === undefined) {
-    return
+  commit(): void {
+    this.assertOperational()
+    this.replayCommitTrace()
+    this.close()
   }
 
-  for (let index = 0; index < subscriptions.length; index++) {
-    subscriptions[index](change)
-  }
-}
+  private replayCommitTrace(): void {
+    const parent = this.parent!
+    const trace = this.trace
+    const traceLength = trace.length
 
-const closeDraftFrame = (draft: InternalDraftFrame): void => {
-  /* v8 ignore start -- defensive idempotence guard for internal close recursion */
-  if (draft.closed) return
-  /* v8 ignore stop */
+    const actualCursor = parent.replayCursor
 
-  draft.closed = true
-
-  const children = draft.children
-  draft.children = undefined
-
-  if (children !== undefined) {
-    for (const child of children) {
-      closeDraftFrame(child)
+    if (actualCursor !== this.baseCursor) {
+      throw new StateMachineError({
+        actualCursor,
+        expectedCursor: this.baseCursor,
+        type: 'DraftCommitConflict',
+      })
     }
 
-    children.clear()
-  }
-
-  if (draft.subscriptions !== undefined) {
-    draft.subscriptions.length = 0
-    draft.subscriptions = undefined
-  }
-
-  draft.trace.length = 0
-
-  const parent = draft.parent
-
-  if (parent?.children !== undefined) {
-    parent.children.delete(draft)
-
-    if (parent.children.size === 0) {
-      parent.children = undefined
+    for (let i = 0; i < traceLength; i++) {
+      parent.replayStep(trace[i])
     }
   }
 
-  draft.parent = undefined
-}
-
-const registerSubscription = <T>(
-  subscriptions: T[],
-  subscription: T,
-  onEmpty?: () => void,
-): (() => void) => {
-  if (!subscriptions.includes(subscription)) {
-    subscriptions.push(subscription)
+  discard(): void {
+    this.assertOperational()
+    this.close()
   }
 
-  return () => {
-    remove(subscriptions, (value) => value === subscription)
+  private close(): void {
+    /* v8 ignore start -- defensive idempotence guard for internal close recursion */
+    if (this.closed) return
+    /* v8 ignore stop */
 
-    if (subscriptions.length === 0) {
-      onEmpty?.()
+    this.closed = true
+
+    const children = this.children
+    this.children = undefined
+
+    if (children !== undefined) {
+      for (const child of children) {
+        child.close()
+      }
+
+      children.clear()
     }
+
+    if (this.subscriptions.length > 0) this.subscriptions.length = 0
+
+    const parent = this.parent
+
+    if (parent instanceof DraftRuntime && parent.children !== undefined) {
+      parent.children.delete(this)
+
+      if (parent.children.size === 0) {
+        parent.children = undefined
+      }
+    }
+
+    this.parent = undefined
   }
-}
 
-const subscribeDraft = (
-  draft: InternalDraftFrame,
-  subscription: InternalSubscription,
-): (() => void) => {
-  const subscriptions = draft.subscriptions ?? (draft.subscriptions = [])
+  do(action: StateMachineIdentifier, payload: unknown): boolean {
+    this.assertOperational()
 
-  return registerSubscription(subscriptions, subscription)
+    const transition = this.resolveTransition(action, payload)
+
+    if (transition === undefined) {
+      return false
+    }
+
+    this.applyTransitionAndAdvance(transition.reducer)
+
+    const selectedStep: InternalSelectedStep = {
+      action: {
+        payload,
+        source: this.actionBuffer.source!,
+        target: this.actionBuffer.target!,
+        type: action,
+      },
+      reducer: transition.reducer,
+    }
+
+    this.trace.push(selectedStep)
+
+    this.emitSelfChange(selectedStep.action)
+
+    return true
+  }
+
+  draft(): DraftRuntime {
+    this.assertOperational()
+    return new DraftRuntime(this)
+  }
+
+  override subscribe(subscription: InternalSubscription): () => void {
+    this.assertOperational()
+    return super.subscribe(subscription)
+  }
 }
 
 /**
  * Creates a runnable service instance from a state machine definition.
  *
  * @param stateMachine - The state machine definition created by the `stateMachine` function
+ * @param options - Optional hydration snapshot for startup
  * @returns A service that can execute actions, track state, and notify subscribers
  */
 export const interpret = <T extends StateMachineInterface>(
-  stateMachine: T,
+  stateMachine: StateMachineInterpretable<T>,
   options?: StateMachineInterpretOptions<T>,
 ): StateMachineService<InferStateMachineModel<T>> => {
-  type Model = InferStateMachineModel<T>
-  if (
-    typeof stateMachine[STATE_MACHINE_STATE] !== 'object' ||
-    stateMachine[STATE_MACHINE_STATE] === null
-  ) {
+  const machineState = stateMachine[STATE_MACHINE_STATE]
+
+  if (!isObject(machineState)) {
     throw new StateMachineError({ type: 'StateMachineExpected' })
   }
 
@@ -177,13 +438,12 @@ export const interpret = <T extends StateMachineInterface>(
     indiceActions,
     indiceStates,
     initial,
+    reconcileContext = DEFAULT_RECONCILE_CONTEXT,
+    snapshotContext = DEFAULT_SNAPSHOT_CONTEXT,
     transitions: transitionMap,
-  } = stateMachine[STATE_MACHINE_STATE]
+  } = machineState
 
-  const hydrate =
-    isObject(options) && Object.hasOwn(options, 'hydrate')
-      ? (options as { hydrate?: unknown }).hydrate
-      : undefined
+  const hydrate = resolveOwnOption(options, 'hydrate')
 
   let context: unknown
   let state: StateMachineIdentifier
@@ -207,18 +467,14 @@ export const interpret = <T extends StateMachineInterface>(
     state = initial!
   }
 
-  const hydratedIndexState = indiceStates.get(state)
+  const hydratedIndexState = indiceStates[state]
 
   if (hydratedIndexState === undefined) {
     throw new StateMachineError({ identifier: state, type: 'StateNotDeclared' })
   }
 
-  // Whether context carries a `state` discriminant. Invariant for the machine's
-  // lifetime: if the initial context has `state`, every reducer return must too
-  // (enforced by the type system). Computed once, used on every dispatch.
   const needsStateInjection = isObject(context) && 'state' in context
 
-  // Validate that startup context discriminant matches startup state.
   if (needsStateInjection) {
     const ctxState = (context as Record<string, unknown>).state
 
@@ -230,350 +486,16 @@ export const interpret = <T extends StateMachineInterface>(
       })
     }
   }
-  let indexState = hydratedIndexState
-  let commitCursor = 0
-  const subscriptions: Array<StateMachineSubscription<Model>> = []
 
-  // Pre-allocated mutable buffers for action/change dispatch — loosely typed
-  // to avoid deep generic resolution on every assignment.
-  const _action: InternalActionBuffer = {
-    payload: undefined,
-    source: undefined,
-    target: undefined,
-    type: undefined,
-  }
-
-  type Change = StateMachineChange<Model>
-  const _change = {
-    action: undefined,
-    context: undefined,
-    state: undefined,
-  } as unknown as Change
-
-  const getDraftStatus = (draft: InternalDraftFrame): StateMachineDraftStatus => {
-    if (inspectDraftLiveness(draft) === 'closed') {
-      return 'closed'
-    }
-
-    if (draft.parent === undefined) {
-      return commitCursor === draft.baseCursor ? 'open' : 'stale'
-    }
-
-    return draftHeadCursor(draft.parent) === draft.baseCursor ? 'open' : 'stale'
-  }
-
-  const createDraft = (
-    parent: InternalDraftFrame | undefined,
-    baseCursor: number,
-  ): StateMachineDraft<Model> => {
-    const frame: InternalDraftFrame = {
-      baseCursor,
-      children: undefined,
-      closed: false,
-      context: snapshotContext(parent === undefined ? context : parent.context),
-      indexState: parent === undefined ? indexState : parent.indexState,
-      parent,
-      state: parent === undefined ? state : parent.state,
-      subscriptions: undefined,
-      trace: [],
-    }
-
-    if (parent !== undefined) {
-      ;(parent.children ?? (parent.children = new Set())).add(frame)
-    }
-
-    const draft: StateMachineDraft<Model> = {
-      commit() {
-        assertDraftOperational(frame)
-
-        if (frame.parent === undefined) {
-          if (commitCursor !== frame.baseCursor) {
-            throw new StateMachineError({
-              actualCursor: commitCursor,
-              expectedCursor: frame.baseCursor,
-              type: 'DraftCommitConflict',
-            })
-          }
-
-          if (frame.trace.length === 0) {
-            closeDraftFrame(frame)
-            return
-          }
-
-          for (let i = 0; i < frame.trace.length; i++) {
-            const step = frame.trace[i]
-            const nextState = step.action.target
-
-            if (step.reducer !== undefined) {
-              context = reconcileContext(context, step.reducer(context, step.action))
-            }
-
-            state = nextState
-            indexState = indiceStates.get(state)!
-
-            // Inject state discriminant after replayed transition
-            if (needsStateInjection) {
-              ;(context as Record<string, unknown>).state = state
-            }
-
-            commitCursor += 1
-
-            _change.action = step.action as (typeof _change)['action']
-            _change.context = context as (typeof _change)['context']
-            _change.state = state as (typeof _change)['state']
-
-            for (let j = 0; j < subscriptions.length; j++) {
-              ;(subscriptions[j] as (change: unknown) => void)(_change)
-            }
-          }
-
-          closeDraftFrame(frame)
-          return
-        }
-
-        const parent = frame.parent
-        const parentHead = draftHeadCursor(parent)
-
-        if (parentHead !== frame.baseCursor) {
-          throw new StateMachineError({
-            actualCursor: parentHead,
-            expectedCursor: frame.baseCursor,
-            type: 'DraftCommitConflict',
-          })
-        }
-
-        if (frame.trace.length === 0) {
-          closeDraftFrame(frame)
-          return
-        }
-
-        const _parentChange = {
-          action: undefined,
-          context: undefined,
-          state: undefined,
-        } as unknown as Change
-
-        for (let i = 0; i < frame.trace.length; i++) {
-          const step = frame.trace[i]
-          const nextState = step.action.target
-
-          if (step.reducer !== undefined) {
-            parent.context = reconcileContext(
-              parent.context,
-              step.reducer(parent.context, step.action),
-            )
-          }
-
-          parent.state = nextState
-          parent.indexState = indiceStates.get(parent.state)!
-
-          if (needsStateInjection) {
-            ;(parent.context as Record<string, unknown>).state = parent.state
-          }
-
-          parent.trace.push(step)
-
-          _parentChange.action = step.action as (typeof _parentChange)['action']
-          _parentChange.context = parent.context as (typeof _parentChange)['context']
-          _parentChange.state = parent.state as (typeof _parentChange)['state']
-
-          notifySubscribers(parent.subscriptions, _parentChange)
-        }
-
-        closeDraftFrame(frame)
-      },
-      get context() {
-        return frame.context as StateMachineDraft<Model>['context']
-      },
-      discard() {
-        assertDraftOperational(frame)
-        closeDraftFrame(frame)
-      },
-      status() {
-        return getDraftStatus(frame)
-      },
-      // @ts-expect-error runtime hot path keeps direct payload parameter shape
-      do(action, payload) {
-        assertDraftOperational(frame)
-
-        const indexAction = indiceActions.get(action)
-
-        if (indexAction === undefined) {
-          throw new StateMachineError({ identifier: action, type: 'ActionNotDeclared' })
-        }
-
-        const transitions = transitionMap.get(szudzik(frame.indexState, indexAction))
-
-        if (transitions === undefined) {
-          return false
-        }
-
-        const actionInfo: InternalActionBuffer = {
-          payload,
-          source: undefined,
-          target: undefined,
-          type: action,
-        }
-
-        let transition: $.Values<typeof transitions> | undefined
-
-        candidateLoop: for (let i = 0; i < transitions.length; i++) {
-          const candidate = transitions[i]
-
-          actionInfo.source = candidate.source
-          actionInfo.target = candidate.target
-
-          const predicates = candidate.predicates
-
-          for (let j = 0; j < predicates.length; j++) {
-            if (!predicates[j](frame.context, actionInfo)) {
-              continue candidateLoop
-            }
-          }
-
-          transition = candidate
-          break
-        }
-
-        if (transition === undefined) {
-          return false
-        }
-
-        const nextState = transition.target
-
-        if (transition.reducer !== undefined) {
-          frame.context = transition.reducer(frame.context, actionInfo)
-        }
-
-        frame.state = nextState
-        frame.indexState = indiceStates.get(frame.state)!
-
-        // Inject state discriminant after transition
-        if (needsStateInjection) {
-          ;(frame.context as Record<string, unknown>).state = frame.state
-        }
-
-        const selectedStep: InternalSelectedStep = {
-          action: {
-            payload,
-            source: actionInfo.source!,
-            target: actionInfo.target!,
-            type: action,
-          },
-          reducer: transition.reducer,
-        }
-
-        frame.trace.push(selectedStep)
-
-        const _draftChange = {
-          action: selectedStep.action,
-          context: frame.context,
-          state: frame.state,
-        } as unknown as Change
-
-        notifySubscribers(frame.subscriptions, _draftChange)
-
-        return true
-      },
-      draft() {
-        assertDraftOperational(frame)
-        return createDraft(frame, draftHeadCursor(frame))
-      },
-      get state() {
-        return frame.state as StateMachineDraft<Model>['state']
-      },
-      subscribe(subscription: StateMachineSubscription<Model>) {
-        assertDraftOperational(frame)
-        return subscribeDraft(frame, subscription as InternalSubscription)
-      },
-    }
-
-    return draft
-  }
-
-  const instance: StateMachineService<Model> = {
-    get context() {
-      return context as StateMachineService<Model>['context']
-    },
-    // @ts-expect-error runtime hot path keeps direct payload parameter shape
-    do(action, payload) {
-      const indexAction = indiceActions.get(action)
-
-      if (indexAction === undefined) {
-        throw new StateMachineError({ identifier: action, type: 'ActionNotDeclared' })
-      }
-
-      const transitions = transitionMap.get(szudzik(indexState, indexAction))
-
-      if (transitions === undefined) {
-        return false
-      }
-
-      // Reuse pre-allocated action object
-      _action.payload = payload
-      _action.type = action
-
-      let transition: $.Values<typeof transitions> | undefined
-
-      candidateLoop: for (let i = 0; i < transitions.length; i++) {
-        const candidate = transitions[i]
-
-        _action.source = candidate.source
-        _action.target = candidate.target
-
-        const predicates = candidate.predicates
-
-        // Optimized predicate evaluation with for-loop
-        for (let j = 0; j < predicates.length; j++) {
-          if (!predicates[j](context, _action)) {
-            continue candidateLoop
-          }
-        }
-
-        transition = candidate
-        break
-      }
-
-      if (transition === undefined) {
-        return false
-      }
-
-      const nextState = transition.target
-
-      if (transition.reducer !== undefined) {
-        context = transition.reducer(context, _action)
-      }
-
-      state = nextState
-      indexState = indiceStates.get(state)!
-
-      // Inject state discriminant after transition
-      if (needsStateInjection) {
-        ;(context as Record<string, unknown>).state = state
-      }
-
-      commitCursor += 1
-
-      // Early exit if no subscriptions to avoid object updates
-      _change.action = _action as (typeof _change)['action']
-      _change.context = context as (typeof _change)['context']
-      _change.state = state as (typeof _change)['state']
-      for (let i = 0; i < subscriptions.length; i++) {
-        ;(subscriptions[i] as (change: unknown) => void)(_change)
-      }
-
-      return true
-    },
-    draft() {
-      return createDraft(undefined, commitCursor)
-    },
-    get state() {
-      return state as StateMachineService<Model>['state']
-    },
-    subscribe(subscription: StateMachineSubscription<Model>) {
-      return registerSubscription(subscriptions, subscription)
-    },
-  }
-
-  return instance
+  return new ServiceRuntime(
+    indiceActions,
+    indiceStates,
+    needsStateInjection,
+    transitionMap,
+    reconcileContext,
+    snapshotContext,
+    context,
+    state,
+    hydratedIndexState,
+  ) as unknown as StateMachineService<InferStateMachineModel<T>>
 }

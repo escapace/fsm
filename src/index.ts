@@ -9,8 +9,8 @@ export type {
   StateMachineErrorMetadata,
   StateMachineErrorType,
 } from './error'
-export { STATE_MACHINE_STATE } from './types'
-export { reconcileContext } from './context-runtime'
+export { STATE_MACHINE_STATE } from './constants'
+export { reconcile } from './context-runtime'
 export { interpret } from './interpret'
 export { stateMachine } from './state-machine'
 export * from './types'

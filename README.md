@@ -46,6 +46,7 @@ const machine = stateMachine()
   }))
   .transition(State.Unlocked, Action.Coin, State.Unlocked)
   .transition(State.Unlocked, Action.Push, State.Locked, () => ({ balance: 0 }))
+  .done()
 
 const service = interpret(machine)
 
@@ -61,7 +62,13 @@ console.log(service.state) // 'UNLOCKED'
 console.log(service.context) // { balance: 0 }
 ```
 
-A machine definition declares states, actions, an initial state, an optional context factory, and transitions. `interpret(...)` turns that definition into a runnable service.
+A machine definition has two phases:
+
+- build it with the fluent `stateMachine()` builder
+- finalize it with `.done()`
+- pass the finalized definition to `interpret(...)`
+
+Finalization produces an immutable definition and precomputes runtime lookup structures once.
 
 `interpret(machine, { hydrate: { state, context } })` starts from a previously saved snapshot instead of the machine initial state and context factory.
 
@@ -78,7 +85,7 @@ const resumed = interpret(machine, {
 
 A running service exposes `state`, `context`, `do(action, payload?)`, `draft()`, and `subscribe(callback)`.
 
-Standalone interpretation requires an initial state. Composition does not add runtime hierarchy; after `.compose(...)` the machine is still flat.
+Standalone interpretation requires a finalized definition with an initial state. Composition requires finalized child definitions. Composition does not add runtime hierarchy; after `.compose(...)` the machine is still flat.
 
 ## Hydration
 
@@ -96,6 +103,57 @@ Rules:
 - `hydrate: undefined` behaves the same as omitting hydration
 - prototype-inherited `hydrate` is ignored; hydration must be provided as an own property on the options object
 
+## Context policy
+
+Context policy is for machines that need custom draft-copy behavior, custom replay publication behavior, or both. It is defined on the finalized machine so behavior is portable with the machine definition.
+
+```ts
+const machine = stateMachine()
+  // ...states/actions/transitions
+  .done({
+    snapshotContext: (context) => ({ ...context }),
+    reconcileContext: (parentContext, nextContext) => {
+      Object.assign(parentContext, nextContext)
+      return parentContext
+    },
+  })
+
+const service = interpret(machine)
+```
+
+Policy execution points:
+
+- `service.do(...)` and `draft.do(...)`: `reconcileContext` is not applied; dispatch remains reducer-driven
+- `draft()` and nested `draft.draft()`: `snapshotContext` creates the new draft baseline
+- `commit()` replay (draft -> parent): parent `reconcileContext` publishes each replayed step
+
+### `snapshotContext(context)`
+
+- input is the source context at draft creation
+- return value becomes the new draft baseline
+- returned value should keep draft writes isolated from the source context graph
+- returned value should match machine context shape
+- for composed machines, returned value should preserve composed group slices (`context[group]`)
+
+For composed machines, invalid output shape is an invalid contract. Behavior is undefined and runtime does not add shape validation.
+
+### `reconcileContext(parentContext, nextContext)`
+
+- inputs are current published context and replay step result
+- return value becomes the published context for that replayed step
+- in-place publication (`mutate parentContext and return it`) and replacement publication (`return new value`) are both supported
+- function runs only during replay publication, not during live `service.do(...)`
+
+### Composed replay precedence
+
+For child-owned replay steps, publication order is deterministic:
+
+- child slice policy runs first
+- parent policy runs second
+- parent `reconcileContext` cannot replace the child group slice by returning a different `context[group]`; child-produced slice is kept for that step
+
+Parent policy should treat child slices as read-only during child-owned replay. Runtime does not enforce this.
+
 ## Outcome model
 
 Most valid operations report ordinary outcomes through return values instead of exceptions.
@@ -103,7 +161,7 @@ Most valid operations report ordinary outcomes through return values instead of 
 - `service.do(...)` and `draft.do(...)` return `true` on a selected transition and `false` when a valid dispatch does not select one
 - `subscribe(...)` returns an unsubscribe function
 - `draft.commit()` and `draft.discard()` return normally on success, including an empty-trace commit
-- thrown `StateMachineError` values indicate malformed definitions, hydration shape mismatches, undeclared actions, unsupported draft snapshots, closed drafts, or conflicting draft commits
+- thrown `StateMachineError` values indicate malformed definitions, hydration shape mismatches, undeclared actions, closed drafts, or conflicting draft commits
 - exceptions thrown by user guards or reducers are propagated as-is (they are not wrapped as `StateMachineError`)
 
 A `false` dispatch always means the machine did not advance. State, context, and subscriptions remain unchanged.
@@ -243,11 +301,29 @@ Draft behavior:
 - commit and discard close the draft observation channel and recursively release descendant draft subscriptions
 - conflicting commits are rejected with `DraftCommitConflict`
 
-Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, cycles, and shared references. Unsupported values such as functions fail at draft creation with `DraftSnapshotFailed`.
+Draft snapshots support primitives, arrays, ordinary objects, `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, typed arrays, functions (preserved by reference), cycles, and shared references.
 
 ## Composition
 
-`.compose(group, child)` merges a child machine into the parent definition while mounting child context under `context[group]`.
+`.compose(group, child)` merges a finalized child machine into the parent definition while mounting child context under `context[group]`.
+
+```ts
+const child = stateMachine()
+  .state('On')
+  .state('Off')
+  .action('Toggle')
+  .transition('On', 'Toggle', 'Off')
+  .transition('Off', 'Toggle', 'On')
+  .done()
+
+const parent = stateMachine()
+  .state('Idle')
+  .compose('power', child)
+  .initial('Idle')
+  .action('Start')
+  .transition('Idle', 'Start', 'On')
+  .done()
+```
 
 Composition stays flat at runtime.
 
@@ -262,11 +338,11 @@ Composition stays flat at runtime.
 - `.context(...).compose(...)` and `.compose(...).context(...)` produce the same compound context shape
 - a child used only through composition may omit its own initial state when transitions target explicit child states
 
-## `reconcileContext(...)`
+## `reconcile(...)`
 
 Reducers may mutate and return the current context value or return a fresh one.
 
-On direct live root dispatch, a fresh reducer result becomes `service.context` directly. Draft commit and composed child updates use `reconcileContext(parentContext, nextContext)` instead. That path reconciles into the existing parent or live context graph when possible rather than blindly replacing the whole value.
+On direct live root dispatch, a fresh reducer result becomes `service.context` directly. Draft commit and composed child updates use the machine’s `reconcileContext` policy. When no custom policy is configured, the default policy uses `reconcile(parentContext, nextContext)`. This path reconciles into the existing parent or live context graph when possible rather than blindly replacing the whole value.
 
 For ordinary mutable object surfaces, reconciliation preserves compatible subtree identity where possible while rebuilding the result to match the next graph. That includes next-key order, sparse-array holes, cycles, shared-reference topology, and compatible `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array instances in place.
 
@@ -276,7 +352,9 @@ Plain-object reconciliation does not preserve arbitrary property-descriptor beha
 
 ## Errors
 
-All thrown errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
+All library-thrown contract and lifecycle errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
+
+Exceptions thrown inside user guards or reducers are propagated unchanged.
 
 | Error                        | Raised when                                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -287,7 +365,6 @@ All thrown errors are `StateMachineError` instances. The human-readable message 
 | `ContextStateMismatch`       | startup context has a `state` discriminant that does not match the startup state.                                              |
 | `ContextGroupConflict`       | a parent context factory returns an own key that conflicts with a composed group name.                                         |
 | `DraftClosed`                | `do(...)`, `draft()`, `commit()`, or `discard()` is called on a closed draft or below a closed ancestor.                       |
-| `DraftSnapshotFailed`        | `draft()` cannot snapshot the current context, usually because it contains unsupported values such as functions.               |
 | `DraftCommitConflict`        | `commit()` runs after the live service or parent draft has advanced since draft creation.                                      |
 | `GroupNameConflict`          | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
 | `HydrationShapeMismatch`     | `interpret(...)` receives a `hydrate` payload that is not an object with `state` and `context` keys.                           |
@@ -303,7 +380,7 @@ A few boundaries are deliberate:
 
 - `false` from `do(...)` conflates two cases: no transition for `(state, action)` and matching transitions whose guards all fail
 - the service type does not narrow itself to the current runtime state; action availability remains a runtime question
-- drafts snapshot context at creation time; unsupported values fail there, not at machine definition time
+- drafts snapshot context at creation time; function values are preserved by reference within the snapshot graph
 - the library stays flat at runtime and does not implement hierarchy, parallel regions, or history semantics
 
 ## Performance

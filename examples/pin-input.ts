@@ -478,5 +478,5 @@ function isValidInput(value: string, type: 'alphanumeric' | 'numeric'): boolean 
  * @returns Active state machine service ready for user interactions
  */
 export function createPinInput(config: PinInputConfig) {
-  return interpret(createPinInputMachine(config))
+  return interpret(createPinInputMachine(config).done())
 }

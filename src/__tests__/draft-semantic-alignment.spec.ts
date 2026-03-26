@@ -30,7 +30,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('A', 'STEP', 'B', (context) => ({ n: context.n + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('STEP'), true)
@@ -56,7 +56,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('A', 'STEP', 'B', (context) => ({ n: context.n + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const ordered: Array<{ source: string; state: string; target: string }> = []
 
     service.subscribe((change) => {
@@ -89,7 +89,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('A', 'STEP', 'B', (context) => ({ n: context.n + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
 
     assert.equal(parent.do('STEP'), true)
@@ -116,7 +116,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     const left = service.draft()
     const right = service.draft()
@@ -145,7 +145,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .context(() => ({ n: 0 }))
       .transition('A', ['BLOCKED', () => false], 'B', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('BLOCKED'), false)
@@ -165,7 +165,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -189,7 +189,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('B', 'STEP', 'C', (context) => ({ n: context.n + 1 }))
       .transition('C', 'STEP', 'D', (context) => ({ n: context.n + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -223,7 +223,7 @@ describe('Lean tranche alignment (P14–P20 runtime)', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
     const grandchild = child.draft()

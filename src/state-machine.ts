@@ -1,23 +1,26 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
-import { szudzik } from 'coastal'
+import { DirectAddressTable, szudzik } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
-import { reconcileContext } from './context-runtime'
+import { CONTEXT_SOURCE_ORIGIN, STATE_MACHINE_STATE } from './constants'
+import { reconcile, snapshot } from './context-runtime'
 import { isObject } from './is-object'
 import { StateMachineError } from './error'
+import { resolveOwnFunctionOption } from './internal-options'
+import { CHILD_GROUP, type GroupScopedReducer } from './internal-policy'
 import { product } from './product'
 import {
-  STATE_MACHINE_STATE,
   StateMachineBuilderActionType,
   type StateMachineBuilder,
   type StateMachineBuilderAction,
   type StateMachineBuilderModel,
   type StateMachineBuilderStage,
+  type StateMachineDefinitionState,
+  type StateMachineDoneOptions,
   type StateMachineIdentifier,
   type StateMachineInterface,
+  type StateMachineTransitionPayload,
 } from './types'
-
-const CONTEXT_SOURCE_ORIGIN = Symbol.for('@escapace/fsm/context-own-factory')
 
 type StateMachineContextSource = (() => unknown) & {
   [CONTEXT_SOURCE_ORIGIN]?: unknown
@@ -74,6 +77,79 @@ const composeContextSource = (
 
   return contextSource
 }
+
+const finalize = <T extends StateMachineBuilderModel>(
+  model: T,
+  options?: StateMachineDoneOptions<T>,
+): StateMachineInterface<T> => {
+  const transitionEntries: StateMachineTransitionPayload[] = []
+  const transitionKeys: number[] = []
+  const transitionValues: StateMachineTransitionPayload[][] = []
+
+  for (const [key, value] of model.state.transitions) {
+    const transitions = value.slice()
+
+    transitionKeys.push(key)
+    transitionValues.push(transitions)
+    transitionEntries.push(...transitions)
+  }
+
+  const resolveSnapshot = resolveOwnFunctionOption(
+    options,
+    'snapshotContext',
+    snapshot as (context: T['state']['context']) => T['state']['context'],
+  )
+  const resolveReconcile = resolveOwnFunctionOption(
+    options,
+    'reconcileContext',
+    reconcile as (
+      parentContext: T['state']['context'],
+      nextContext: T['state']['context'],
+    ) => T['state']['context'],
+  )
+
+  const composedSnapshotContext =
+    model.state.compositions.size === 0
+      ? resolveSnapshot
+      : (context: T['state']['context']) => {
+          const scoped = resolveSnapshot(context) as Record<StateMachineIdentifier, unknown>
+
+          for (const [group, child] of model.state.compositions) {
+            const childSnapshotContext = child[STATE_MACHINE_STATE].snapshotContext as (
+              context: unknown,
+            ) => unknown
+            scoped[group] = childSnapshotContext(scoped[group])
+          }
+
+          return scoped as T['state']['context']
+        }
+
+  // eslint-disable-next-line typescript/consistent-type-assertions
+  const finalizedState = {
+    actions: [...model.state.actions],
+    context: model.state.context,
+    indiceActions: Object.fromEntries(model.state.indiceActions),
+    indiceStates: Object.fromEntries(model.state.indiceStates),
+    initial: model.state.initial,
+    reconcileContext: resolveReconcile,
+    snapshotContext: composedSnapshotContext,
+    states: [...model.state.states],
+    transitionEntries,
+    transitions: new DirectAddressTable(
+      transitionKeys.length === 0 ? [0] : transitionKeys,
+      transitionKeys.length === 0 ? [undefined] : transitionValues,
+    ),
+  } as StateMachineDefinitionState<T['state']>
+
+  return {
+    [STATE_MACHINE_STATE]: finalizedState,
+  }
+}
+
+const done =
+  <T extends StateMachineBuilderModel>(model: T) =>
+  (options?: StateMachineDoneOptions<T>): StateMachineInterface<T> =>
+    finalize(model, options)
 
 const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderAction) => {
   switch (action.type) {
@@ -156,79 +232,83 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
 
       // Merge child transitions, wrapping guards/reducers to project/inject
       // through the group's context slice.
-      for (const [, transitions] of childState.transitions.entries()) {
-        for (const transition of transitions) {
-          const predicates =
-            transition.predicates.length === 0
-              ? transition.predicates
-              : transition.predicates.map(
-                  (predicate) =>
-                    (context: Record<StateMachineIdentifier, unknown>, info: unknown) =>
-                      predicate(context[group], info),
+      for (const transition of childState.transitionEntries) {
+        const predicates =
+          transition.predicates.length === 0
+            ? transition.predicates
+            : transition.predicates.map(
+                (predicate) => (context: Record<StateMachineIdentifier, unknown>, info: unknown) =>
+                  predicate(context[group], info),
+              )
+
+        const injectChildState = (context: Record<StateMachineIdentifier, unknown>) => {
+          const child = context[group]
+
+          if (isObject(child) && 'state' in child) {
+            ;(child as Record<string, unknown>).state = transition.target
+          }
+        }
+
+        const childReconcileContext = childState.reconcileContext as (
+          parentContext: unknown,
+          nextContext: unknown,
+        ) => unknown
+
+        const reducer =
+          transition.reducer === undefined
+            ? // No child reducer, but still need to inject child state discriminant
+              (context: Record<StateMachineIdentifier, unknown>) => {
+                injectChildState(context)
+
+                return context
+              }
+            : (context: Record<StateMachineIdentifier, unknown>, info: unknown) => {
+                context[group] = childReconcileContext(
+                  context[group],
+                  transition.reducer!(context[group], info),
                 )
 
-          const injectChildState = (context: Record<StateMachineIdentifier, unknown>) => {
-            const child = context[group]
+                injectChildState(context)
 
-            if (isObject(child) && 'state' in child) {
-              ;(child as Record<string, unknown>).state = transition.target
-            }
-          }
+                return context
+              }
 
-          const reducer =
-            transition.reducer === undefined
-              ? // No child reducer, but still need to inject child state discriminant
-                (context: Record<StateMachineIdentifier, unknown>) => {
-                  injectChildState(context)
+        ;(reducer as GroupScopedReducer)[CHILD_GROUP] = group
 
-                  return context
-                }
-              : (context: Record<StateMachineIdentifier, unknown>, info: unknown) => {
-                  context[group] = reconcileContext(
-                    context[group],
-                    transition.reducer!(context[group], info),
-                  )
+        const lifted = {
+          action: transition.action,
+          predicates,
+          reducer,
+          source: transition.source,
+          target: transition.target,
+        }
 
-                  injectChildState(context)
+        const indexAction = model.state.actions.indexOf(lifted.action)
 
-                  return context
-                }
+        /* v8 ignore start -- defensive: builder guarantees child actions/states are merged */
+        if (indexAction === -1) {
+          throw new StateMachineError({ identifier: lifted.action, type: 'ActionNotDeclared' })
+        }
 
-          const lifted = {
-            action: transition.action,
-            predicates,
-            reducer,
-            source: transition.source,
-            target: transition.target,
-          }
+        const indexSource = model.state.states.indexOf(lifted.source)
+        const indexTarget = model.state.states.indexOf(lifted.target)
 
-          const indexAction = model.state.actions.indexOf(lifted.action)
+        if (indexSource === -1) {
+          throw new StateMachineError({ identifier: lifted.source, type: 'StateNotDeclared' })
+        }
 
-          /* v8 ignore start -- defensive: builder guarantees child actions/states are merged */
-          if (indexAction === -1) {
-            throw new StateMachineError({ identifier: lifted.action, type: 'ActionNotDeclared' })
-          }
+        if (indexTarget === -1) {
+          throw new StateMachineError({ identifier: lifted.target, type: 'StateNotDeclared' })
+        }
+        /* v8 ignore stop */
 
-          const indexSource = model.state.states.indexOf(lifted.source)
-          const indexTarget = model.state.states.indexOf(lifted.target)
+        const indexTransition = szudzik(indexSource, indexAction)
+        const query = model.state.transitions.get(indexTransition)
 
-          if (indexSource === -1) {
-            throw new StateMachineError({ identifier: lifted.source, type: 'StateNotDeclared' })
-          }
-
-          if (indexTarget === -1) {
-            throw new StateMachineError({ identifier: lifted.target, type: 'StateNotDeclared' })
-          }
-          /* v8 ignore stop */
-
-          const indexTransition = szudzik(indexSource, indexAction)
-          const query = model.state.transitions.get(indexTransition)
-
-          if (query === undefined) {
-            model.state.transitions.set(indexTransition, [lifted])
-          } else {
-            query.push(lifted)
-          }
+        if (query === undefined) {
+          model.state.transitions.set(indexTransition, [lifted])
+        } else {
+          query.push(lifted)
         }
       }
 
@@ -313,7 +393,7 @@ const state = (model: StateMachineBuilderModel) => (argument: StateMachineIdenti
     type: StateMachineBuilderActionType.State,
   })
 
-  return { compose: compose(next), initial: initial(next), state: state(next) }
+  return { compose: compose(next), done: done(next), initial: initial(next), state: state(next) }
 }
 
 const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdentifier) => {
@@ -328,6 +408,7 @@ const action = (model: StateMachineBuilderModel) => (argument: StateMachineIdent
     action: action(next),
     compose: compose(next),
     context: context(next),
+    done: done(next),
     transition: transition(next),
   }
 }
@@ -340,7 +421,7 @@ const context = (model: StateMachineBuilderModel) => (argument: () => unknown) =
     type: StateMachineBuilderActionType.Context,
   })
 
-  return { compose: compose(next), transition: transition(next) }
+  return { compose: compose(next), done: done(next), transition: transition(next) }
 }
 
 const compose =
@@ -358,6 +439,7 @@ const compose =
       action: action(next),
       compose: compose(next),
       context: context(next),
+      done: done(next),
       initial: initial(next),
       state: state(next),
       transition: transition(next),
@@ -405,7 +487,7 @@ const transition =
 
     return {
       compose: compose(next),
-      [STATE_MACHINE_STATE]: next.state,
+      done: done(next),
       transition: transition(next),
     }
   }
@@ -416,7 +498,7 @@ const initial = (model: StateMachineBuilderModel) => (argument: StateMachineIden
     type: StateMachineBuilderActionType.InitialState,
   })
 
-  return { action: action(next), compose: compose(next) }
+  return { action: action(next), compose: compose(next), done: done(next) }
 }
 
 /**

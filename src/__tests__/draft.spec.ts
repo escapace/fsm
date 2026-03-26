@@ -8,6 +8,8 @@ import {
   type StateMachineErrorType,
 } from '../index'
 
+const returnOne = () => 1
+
 const assertErrorType = (function_: () => unknown, type: StateMachineErrorType) => {
   try {
     function_()
@@ -27,7 +29,7 @@ describe('draft runtime semantics', () => {
       .action('NEXT')
       .transition('A', 'NEXT', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(service.context, undefined)
@@ -53,12 +55,12 @@ describe('draft runtime semantics', () => {
 
     const machine = stateMachine()
       .state('Idle')
-      .compose('child', child)
+      .compose('child', child.done())
       .initial('Idle')
       .action('ENTER')
       .transition('Idle', 'ENTER', 'ChildA')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.deepEqual(service.context, {
       child: { value: 0 },
@@ -104,7 +106,7 @@ describe('draft runtime semantics', () => {
         return context
       })
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parentContextReference = service.context
     const draft = service.draft()
 
@@ -131,7 +133,7 @@ describe('draft runtime semantics', () => {
       .transition('A', ['BLOCKED', () => false], 'B')
       .transition('A', 'PASS', 'B', (context) => ({ attempts: context.attempts + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('MISSING'), false)
@@ -154,7 +156,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B', (context) => ({ ticks: context.ticks + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ ticks: context.ticks + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const events: Array<{ source: string; state: string; target: string; ticks: number }> = []
 
     service.subscribe((change) => {
@@ -190,7 +192,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const serviceStates: string[] = []
     const draftStates: string[] = []
 
@@ -214,6 +216,31 @@ describe('draft runtime semantics', () => {
     assert.deepEqual(serviceStates, ['B', 'C'])
   })
 
+  it('draft local notifications reuse one change envelope object across steps', () => {
+    const machine = stateMachine()
+      .state('A')
+      .state('B')
+      .state('C')
+      .initial('A')
+      .action('STEP')
+      .transition('A', 'STEP', 'B')
+      .transition('B', 'STEP', 'C')
+
+    const service = interpret(machine.done())
+    const draft = service.draft()
+    const changes: unknown[] = []
+
+    draft.subscribe((change) => {
+      changes.push(change)
+    })
+
+    assert.equal(draft.do('STEP'), true)
+    assert.equal(draft.do('STEP'), true)
+
+    assert.equal(changes.length, 2)
+    assert.equal(changes[0], changes[1])
+  })
+
   it('child commit publishes to parent subscribers with stepwise parent-visible state', () => {
     const machine = stateMachine()
       .state('A')
@@ -227,7 +254,7 @@ describe('draft runtime semantics', () => {
       .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
       .transition('C', 'STEP', 'D', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
 
     assert.equal(parent.do('STEP'), true)
@@ -267,7 +294,7 @@ describe('draft runtime semantics', () => {
       .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
       .transition('C', 'STEP', 'D', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
     const grandchild = child.draft()
@@ -310,7 +337,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -340,7 +367,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     let calls = 0
@@ -368,7 +395,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -396,7 +423,7 @@ describe('draft runtime semantics', () => {
       .context(() => ({ count: 0 }))
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.status(), 'open')
@@ -420,7 +447,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const left = service.draft()
     const right = service.draft()
 
@@ -444,7 +471,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('STEP'), true)
@@ -461,7 +488,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.status(), 'open')
@@ -477,7 +504,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const left = service.draft()
     const right = service.draft()
 
@@ -497,7 +524,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const left = service.draft()
     const right = service.draft()
 
@@ -519,7 +546,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
       .transition('B', 'STEP', 'C', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const notifications: string[] = []
 
     service.subscribe((change) => {
@@ -551,7 +578,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -577,7 +604,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const staleChild = parent.draft()
     const winningChild = parent.draft()
@@ -600,7 +627,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -619,7 +646,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -641,7 +668,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -661,7 +688,7 @@ describe('draft runtime semantics', () => {
       .context(() => ({ count: 0 }))
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
     let draftNotifications = 0
     let serviceNotifications = 0
@@ -692,7 +719,7 @@ describe('draft runtime semantics', () => {
       .action('BLOCKED')
       .transition('A', ['BLOCKED', () => false], 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.status(), 'open')
@@ -719,7 +746,7 @@ describe('draft runtime semantics', () => {
         'B',
       )
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.status(), 'open')
@@ -735,7 +762,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.status(), 'open')
@@ -751,7 +778,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -770,7 +797,7 @@ describe('draft runtime semantics', () => {
       .transition('A', 'STEP', 'B')
       .transition('B', 'STEP', 'C')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
     const grandchild = child.draft()
@@ -788,7 +815,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', 'STEP', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
     const grandchild = child.draft()
@@ -811,7 +838,7 @@ describe('draft runtime semantics', () => {
       .context(() => ({ count: 0 }))
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const seen: string[] = []
 
     service.subscribe((change) => {
@@ -837,7 +864,7 @@ describe('draft runtime semantics', () => {
       .context(() => ({ count: 0 }))
       .transition('A', 'STEP', 'B', (context) => ({ count: context.count + 1 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
 
@@ -859,7 +886,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', ['STEP', guard], 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('STEP'), true)
@@ -888,7 +915,7 @@ describe('draft runtime semantics', () => {
       .action('STEP')
       .transition('A', ['STEP', guard], 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const draft = service.draft()
 
     assert.equal(draft.do('STEP'), true)
@@ -911,7 +938,7 @@ describe('draft runtime semantics', () => {
       .context(() => ({ count: 0 }))
       .transition('A', 'STEP', 'B', reducer)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parent = service.draft()
     const child = parent.draft()
     const grandchild = child.draft()
@@ -938,7 +965,7 @@ describe('draft runtime semantics', () => {
       .context<Record<string, number>>(() => ({ keep: 1, remove: 2 }))
       .transition('A', 'STEP', 'B', () => ({ add: 3, keep: 9 }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const parentContextReference = service.context
     const draft = service.draft()
 
@@ -949,16 +976,18 @@ describe('draft runtime semantics', () => {
     assert.deepEqual(service.context, { add: 3, keep: 9 })
   })
 
-  it('draft creation rejects unsupported context values cleanly', () => {
+  it('draft creation supports function context values and preserves references', () => {
     const machine = stateMachine()
       .state('A')
       .initial('A')
       .action('NOP')
-      .context(() => ({ bad: () => 1 }))
+      .context(() => ({ bad: returnOne }))
       .transition('A', 'NOP', 'A')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
+    const draft = service.draft()
 
-    assertErrorType(() => service.draft(), 'DraftSnapshotFailed')
+    assert.equal(draft.context.bad, returnOne)
+    assert.equal(draft.context.bad(), 1)
   })
 })

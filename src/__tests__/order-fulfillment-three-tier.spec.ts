@@ -85,7 +85,7 @@ const buildPaymentMachine = () => {
     .state('PaymentAuthorizing')
     .state('PaymentApproved')
     .state('PaymentDeclined')
-    .compose('fraud', fraud)
+    .compose('fraud', fraud.done())
     .initial('PaymentIdle')
     .action<'StartAuth'>('StartAuth')
     .action<'StartFraud'>('StartFraud')
@@ -114,7 +114,7 @@ const buildOrderMachine = () => {
     .state('Checkout')
     .state('Completed')
     .state('Cancelled')
-    .compose('payment', payment)
+    .compose('payment', payment.done())
     .initial('Cart')
     .action<'BeginCheckout'>('BeginCheckout')
     .action<'SubmitOrder', { orderId: string; total: number }>('SubmitOrder')
@@ -253,7 +253,7 @@ describe('three-tier order orchestration (type-level)', () => {
   })
 
   it('service surface accepts deep actions and subscription type matches expansion', () => {
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     service.do('BeginCheckout')
     service.do('SubmitOrder', { orderId: 'o-1', total: 100 })
@@ -304,7 +304,7 @@ describe('three-tier order orchestration (type-level)', () => {
 describe('three-tier order orchestration (runtime)', () => {
   it('walks happy path across root -> payment -> fraud -> completion', () => {
     const machine = buildOrderMachine()
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     const events: Array<{ source: string; state: string; target: string; type: string }> = []
 
@@ -399,7 +399,7 @@ describe('three-tier order orchestration (runtime)', () => {
 
   it('enforces guard failures, declined branch, and false returns for missing candidates', () => {
     const machine = buildOrderMachine()
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.equal(service.do('BeginCheckout'), true)
 
@@ -439,7 +439,7 @@ describe('three-tier order orchestration (runtime)', () => {
 
   it('throws on unknown action and unsubscribe stops notifications', () => {
     const machine = buildOrderMachine()
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     let calls = 0
     const unsubscribe = service.subscribe(() => {

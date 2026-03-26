@@ -82,7 +82,7 @@ describe('primitive context: type-level', () => {
 
 describe('primitive context: runtime', () => {
   it('number context: transitions update context correctly', () => {
-    const svc = interpret(numberMachine)
+    const svc = interpret(numberMachine.done())
     assert.equal(svc.context, 0)
     assert.equal(svc.state, 'A')
 
@@ -96,7 +96,7 @@ describe('primitive context: runtime', () => {
   })
 
   it('string context: transitions update context correctly', () => {
-    const svc = interpret(stringMachine)
+    const svc = interpret(stringMachine.done())
     assert.equal(svc.context, 'hello')
 
     svc.do('Swap')
@@ -109,7 +109,7 @@ describe('primitive context: runtime', () => {
   })
 
   it('injection is no-op for primitive context', () => {
-    const svc = interpret(numberMachine)
+    const svc = interpret(numberMachine.done())
     svc.do('Go')
 
     // number has no 'state' property — injection guard skips
@@ -118,7 +118,7 @@ describe('primitive context: runtime', () => {
   })
 
   it('draft works with primitive context', () => {
-    const svc = interpret(numberMachine)
+    const svc = interpret(numberMachine.done())
     const draft = svc.draft()
 
     draft.do('Go')
@@ -130,7 +130,7 @@ describe('primitive context: runtime', () => {
   })
 
   it('subscribe sees correct primitive context', () => {
-    const svc = interpret(numberMachine)
+    const svc = interpret(numberMachine.done())
     const seen: number[] = []
 
     svc.subscribe((change) => {

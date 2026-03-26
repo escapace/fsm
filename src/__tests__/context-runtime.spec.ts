@@ -218,7 +218,7 @@ const createComposedMachine = (
 
   return stateMachine()
     .state('Idle')
-    .compose('child', child)
+    .compose('child', child.done())
     .initial('Idle')
     .action('ENTER')
     .context(() => ({ parent: 41, sibling: { label: 'stay' } }))
@@ -248,7 +248,7 @@ const createNestedComposedMachine = (createLive: ReactiveContextCase['createLive
 
   const middle = stateMachine()
     .state('MiddleIdle')
-    .compose('leaf', leaf)
+    .compose('leaf', leaf.done())
     .initial('MiddleIdle')
     .action('ENTER_LEAF')
     .context(() => ({ middleKeep: true }))
@@ -256,7 +256,7 @@ const createNestedComposedMachine = (createLive: ReactiveContextCase['createLive
 
   return stateMachine()
     .state('RootIdle')
-    .compose('middle', middle)
+    .compose('middle', middle.done())
     .initial('RootIdle')
     .action('ENTER_MIDDLE')
     .context(() => ({ rootKeep: 1 }))
@@ -305,7 +305,7 @@ const createDiscriminatedComposedMachine = (createLive: ReactiveContextCase['cre
 
   return stateMachine()
     .state('Idle')
-    .compose('child', child)
+    .compose('child', child.done())
     .initial('Idle')
     .action('ENTER')
     .context(() => ({ parent: 41 }))
@@ -314,7 +314,7 @@ const createDiscriminatedComposedMachine = (createLive: ReactiveContextCase['cre
 
 const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   it('replaces the live root when a root reducer returns a fresh object', () => {
-    const service = interpret(createRootReplacingMachine(testCase.createLive))
+    const service = interpret(createRootReplacingMachine(testCase.createLive).done())
     const rootReference = service.context
     const nestedReference = rootReference.nested
     const listReference = rootReference.list
@@ -336,7 +336,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   })
 
   it('preserves the live root when a root reducer mutates in place', () => {
-    const service = interpret(createRootMutatingMachine(testCase.createLive))
+    const service = interpret(createRootMutatingMachine(testCase.createLive).done())
     const rootReference = service.context
     const nestedReference = rootReference.nested
     const listReference = rootReference.list
@@ -359,7 +359,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   })
 
   it('uses a detached draft snapshot and commits back into the same live root', () => {
-    const service = interpret(createRootReplacingMachine(testCase.createLive))
+    const service = interpret(createRootReplacingMachine(testCase.createLive).done())
     const rootReference = service.context
     const nestedReference = rootReference.nested
     const listReference = rootReference.list
@@ -405,7 +405,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
 
   it('updates only the reactive child slice during live composed dispatch', () => {
     const onGuard = vi.fn(() => undefined)
-    const service = interpret(createComposedMachine(testCase.createLive, onGuard))
+    const service = interpret(createComposedMachine(testCase.createLive, onGuard).done())
 
     assert.equal(service.do('ENTER'), true)
     assert.equal(service.state, 'ChildA')
@@ -442,7 +442,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
 
   it('commits composed child draft results into the same live child slice', () => {
     const onGuard = vi.fn(() => undefined)
-    const service = interpret(createComposedMachine(testCase.createLive, onGuard))
+    const service = interpret(createComposedMachine(testCase.createLive, onGuard).done())
 
     assert.equal(service.do('ENTER'), true)
 
@@ -507,7 +507,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   })
 
   it('publishes recursively through nested composed child slices', () => {
-    const service = interpret(createNestedComposedMachine(testCase.createLive))
+    const service = interpret(createNestedComposedMachine(testCase.createLive).done())
 
     assert.equal(service.do('ENTER_MIDDLE'), true)
     assert.equal(service.state, 'MiddleIdle')
@@ -546,7 +546,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   })
 
   it('keeps discriminated-union root context aligned through reactive draft commit', () => {
-    const service = interpret(createDiscriminatedRootMachine(testCase.createLive))
+    const service = interpret(createDiscriminatedRootMachine(testCase.createLive).done())
     const rootReference = service.context
     const nestedReference = rootReference.nested
     const listReference = rootReference.list
@@ -595,7 +595,7 @@ const runReactiveContextCompliance = (testCase: ReactiveContextCase) => {
   })
 
   it('keeps discriminated-union child context aligned on reactive composed dispatch', () => {
-    const service = interpret(createDiscriminatedComposedMachine(testCase.createLive))
+    const service = interpret(createDiscriminatedComposedMachine(testCase.createLive).done())
 
     assert.equal(service.do('ENTER'), true)
     assert.equal(service.state, 'ChildA')

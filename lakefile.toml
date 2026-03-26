@@ -53,3 +53,17 @@ roots = [
   "ProjectionInvariants",
   "ProjectionSoundness",
 ]
+
+[[lean_lib]]
+name = "Reconcile"
+srcDir = "lean"
+roots = [
+  "Reconcile.Defs",
+  "Reconcile.WF",
+  "Reconcile.SnapshotSpec",
+  "Reconcile.SnapshotSoundness",
+  "Reconcile.ReconcileSpec",
+  "Reconcile.ReconcileSoundness",
+  "Reconcile.Algorithm",
+  "Reconcile.Test",
+]

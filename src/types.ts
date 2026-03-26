@@ -2,9 +2,9 @@
 /* eslint-disable typescript/no-redundant-type-constituents */
 /* eslint-disable typescript/no-explicit-any */
 
+import type { DirectAddressTable } from 'coastal'
 import type $ from '@escapace/typelevel'
-
-export const STATE_MACHINE_STATE = Symbol.for('@escapace/fsm/state')
+import type { STATE_MACHINE_STATE } from './constants'
 
 export enum StateMachineBuilderActionType {
   Context,
@@ -45,6 +45,8 @@ export type StateMachineBuilderActionTransition<
   }
 >
 
+export type StateMachineTransitionPayload = StateMachineBuilderActionTransition['payload']
+
 export type StateMachineBuilderActionContext<T = unknown> = StateMachineBuilderActionBase<
   StateMachineBuilderActionType.Context,
   { context: () => T }
@@ -76,14 +78,10 @@ export type StateMachineBuilderAction =
   | StateMachineBuilderActionState
   | StateMachineBuilderActionTransition
 
-export interface StateMachineBuilderState {
+export interface StateMachineModelState {
   actions: StateMachineIdentifierAction[]
-  compositions: Map<StateMachineIdentifierState, StateMachineInterface>
   context: (() => unknown) | unknown
-  indiceActions: Map<StateMachineIdentifierAction, number>
-  indiceStates: Map<StateMachineIdentifierState, number>
   states: StateMachineIdentifierState[]
-  transitions: Map<number, Array<StateMachineBuilderActionTransition['payload']>>
   __compositions?: Array<{ group: StateMachineIdentifierState; machine: StateMachineInterface }>
   __transitions?: Array<{
     action: StateMachineIdentifierAction
@@ -92,6 +90,48 @@ export interface StateMachineBuilderState {
   }>
   initial?: StateMachineIdentifierState
 }
+
+export interface StateMachineBuilderState extends StateMachineModelState {
+  compositions: Map<StateMachineIdentifierState, StateMachineInterface>
+  indiceActions: Map<StateMachineIdentifierAction, number>
+  indiceStates: Map<StateMachineIdentifierState, number>
+  transitions: Map<number, StateMachineTransitionPayload[]>
+}
+
+export interface StateMachineContextPolicy<TContext = unknown> {
+  reconcileContext: (parentContext: TContext, nextContext: TContext) => TContext
+  snapshotContext: (context: TContext) => TContext
+}
+
+export interface StateMachineDoneOptions<
+  TBuilderModel extends StateMachineBuilderModel = StateMachineBuilderModel,
+> {
+  reconcileContext?: StateMachineContextPolicy<
+    TBuilderModel['state']['context']
+  >['reconcileContext']
+  snapshotContext?: StateMachineContextPolicy<TBuilderModel['state']['context']>['snapshotContext']
+}
+
+export type StateMachineDefinitionState<
+  TState extends StateMachineModelState = StateMachineModelState,
+> = $.Prettify<
+  {
+    indiceActions: Record<StateMachineIdentifierAction, number>
+    indiceStates: Record<StateMachineIdentifierState, number>
+    reconcileContext: StateMachineContextPolicy['reconcileContext']
+    snapshotContext: StateMachineContextPolicy['snapshotContext']
+    transitionEntries: StateMachineTransitionPayload[]
+    transitions: DirectAddressTable<StateMachineTransitionPayload[]>
+  } & Omit<
+    TState,
+    | '__compositions'
+    | '__transitions'
+    | 'compositions'
+    | 'indiceActions'
+    | 'indiceStates'
+    | 'transitions'
+  >
+>
 
 export interface StateMachineBuilderInitialState extends StateMachineBuilderState {
   actions: []
@@ -138,32 +178,28 @@ export type StateMachineGroups<P extends StateMachineBuilderModel> =
       : never
     : never
 
-export type StateMachineActionPayloadsAtState<S> = S extends { __actionPayloads: infer M }
-  ? $.Cast<M, Record<StateMachineIdentifierAction, unknown>>
+export type StateMachineActionPayloadsAtState<S> = S extends {
+  __actionPayloads: infer M extends Record<StateMachineIdentifierAction, unknown>
+}
+  ? M
   : {}
 
 export type StateMachineComposedChildActions<P extends StateMachineBuilderModel> =
   StateMachineCompositionsAtState<P['state']> extends infer U
-    ? U extends { machine: infer M extends StateMachineInterface }
+    ? U extends { machine: infer M }
       ? StateMachineActions<InferStateMachineModel<M>>
       : never
     : never
 
 // Actions declared by the parent (not introduced by previously composed children)
 // that share a name with an action in the new child.
-export type StateMachineComposeSharedActions<
-  P extends StateMachineBuilderModel,
-  M extends StateMachineInterface,
-> = Exclude<
+export type StateMachineComposeSharedActions<P extends StateMachineBuilderModel, M> = Exclude<
   Extract<StateMachineActions<P>, StateMachineActions<InferStateMachineModel<M>>>,
   StateMachineComposedChildActions<P>
 >
 
 // Among parent/child overlapping actions, find those with incompatible payload types.
-export type StateMachineComposePayloadConflict<
-  P extends StateMachineBuilderModel,
-  M extends StateMachineInterface,
-> = {
+export type StateMachineComposePayloadConflict<P extends StateMachineBuilderModel, M> = {
   [K in StateMachineComposeSharedActions<P, M>]: [StateMachineActionPayload<P, K>] extends [
     StateMachineActionPayload<InferStateMachineModel<M>, K>,
   ]
@@ -178,7 +214,7 @@ export type StateMachineComposePayloadConflict<
 export type StateMachineComposePrecondition<
   P extends StateMachineBuilderModel,
   G extends StateMachineIdentifierState,
-  M extends StateMachineInterface,
+  M,
 > = G extends StateMachineGroups<P> | StateMachineStates<P>
   ? never
   : [G extends keyof StateMachineBaseContext<P['state']['context']> ? G : never] extends [never]
@@ -314,7 +350,7 @@ export type StateMachineTransitionPayloads<T extends StateMachineBuilderModel> =
   | (StateMachineCompositionsAtState<T['state']> extends infer E
       ? [E] extends [never]
         ? never
-        : E extends { machine: infer M extends StateMachineInterface }
+        : E extends { machine: infer M }
           ? StateMachineTransitionPayloads<InferStateMachineModel<M>>
           : never
       : never)
@@ -396,25 +432,35 @@ export interface StateMachineService<
   subscribe: (subscription: StateMachineSubscription<T>) => () => void
 }
 
-export type InferStateMachineModel<T extends StateMachineInterface> =
+export type InferStateMachineModel<T> =
   T extends StateMachineInterface<StateMachineBuilderModel<infer U>>
     ? StateMachineBuilderModel<U>
+    : T extends StateMachineBuilder<infer U, infer _K extends number | string | symbol>
+      ? U extends StateMachine<infer M>
+        ? M
+        : never
+      : T extends StateMachine<infer M>
+        ? M
+        : never
+
+export type InferStateMachineService<T> = StateMachineService<InferStateMachineModel<T>>
+
+export type StateMachineInterpretable<T extends StateMachineInterface = StateMachineInterface> =
+  T extends StateMachineInterface<infer U>
+    ? [U['state']['initial']] extends [undefined]
+      ? never
+      : T
     : never
 
-export type InferStateMachineService<T extends StateMachineInterface> = StateMachineService<
-  InferStateMachineModel<T>
->
-
-export interface StateMachineInterpretHydration<
-  T extends StateMachineInterface = StateMachineInterface,
-> {
+export interface StateMachineInterpretHydration<T = StateMachineInterface> {
   context: InferStateMachineModel<T>['state']['context']
   state: StateMachineStates<InferStateMachineModel<T>>
 }
 
-export interface StateMachineInterpretOptions<
-  T extends StateMachineInterface = StateMachineInterface,
-> {
+export interface StateMachineInterpretOptions<T = StateMachineInterface> {
+  /**
+   * Startup snapshot to hydrate the runtime state and context.
+   */
   hydrate?: StateMachineInterpretHydration<T>
 }
 
@@ -456,41 +502,42 @@ export type StateMachineReducer<
 export interface StateMachineInterface<
   T extends StateMachineBuilderModel = StateMachineBuilderModel,
 > {
-  [STATE_MACHINE_STATE]: T['state']
+  [STATE_MACHINE_STATE]: StateMachineDefinitionState<T['state']>
 }
 
-export interface StateMachine<T extends StateMachineBuilderModel> extends StateMachineInterface<T> {
+export interface StateMachine<T extends StateMachineBuilderModel> {
   action: <U extends StateMachineIdentifierAction, C = never>(
     action: Exclude<U, StateMachineActions<T>>,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionDeclareAction<U, C>>,
-    'action' | 'compose' | 'context' | 'transition'
+    'action' | 'compose' | 'context' | 'done' | 'transition'
   >
   compose: <G extends StateMachineIdentifierState, M extends StateMachineInterface>(
     group: ([StateMachineComposePrecondition<T, G, M>] extends [never] ? never : unknown) & G,
     machine: M,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionCompose<G, M>>,
-    'action' | 'compose' | 'context' | 'initial' | 'state' | 'transition'
+    'action' | 'compose' | 'context' | 'done' | 'initial' | 'state' | 'transition'
   >
   context: <U = never>(
     context: (() => U) &
       ([StateMachineContextGroupConflicts<T, U>] extends [never] ? unknown : never),
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionContext<U>>,
-    'compose' | 'transition'
+    'compose' | 'done' | 'transition'
   >
+  done: (options?: StateMachineDoneOptions<T>) => StateMachineInterface<T>
   initial: <U extends StateMachineStates<T>>(
     states: U,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionInitialState<U>>,
-    'action' | 'compose'
+    'action' | 'compose' | 'done'
   >
   state: <U extends StateMachineIdentifierState>(
     state: Exclude<U, StateMachineStates<T>>,
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionState<U>>,
-    'compose' | 'initial' | 'state'
+    'compose' | 'done' | 'initial' | 'state'
   >
   transition: <
     A extends StateMachineStates<T>,
@@ -513,6 +560,6 @@ export interface StateMachine<T extends StateMachineBuilderModel> extends StateM
       : [reducer: StateMachineReducer<T, NoInfer<A>, NoInfer<B>, NoInfer<C>>]
   ) => StateMachineBuilder<
     StateMachineBuilderStage<T, StateMachineBuilderActionTransition<A, B, C>>,
-    'compose' | 'transition' | typeof STATE_MACHINE_STATE
+    'compose' | 'done' | 'transition'
   >
 }

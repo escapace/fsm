@@ -24,7 +24,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .action(A.Next)
       .transition(S.A, A.Next, S.B)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.equal(service.context, undefined)
     assert.equal(service.do(A.Next), true)
@@ -50,8 +50,8 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .transition(S.A, A.Flip, S.B, (context) => ({ steps: context.steps + 1 }))
       .transition(S.B, A.Flip, S.A, (context) => ({ steps: context.steps + 1 }))
 
-    const left = interpret(machine)
-    const right = interpret(machine)
+    const left = interpret(machine.done())
+    const right = interpret(machine.done())
 
     const l1 = left.do(A.Flip)
     const r1 = right.do(A.Flip)
@@ -94,7 +94,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       // candidate 3: also passes, but must not be reached
       .transition(S.Start, [A.Go, thirdGuard], S.End, () => ({ chosen: 'third' }))
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     const observed: Array<{ payload: unknown; source: string; target: string; type: string }> = []
 
     service.subscribe((change) => {
@@ -148,7 +148,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .transition(S.A, [A.Try, g1], S.B)
       .transition(S.A, [A.Try, g2], S.B)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     // all candidates fail guards
     const failByGuards = service.do(A.Try)
@@ -185,7 +185,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .transition(S.B, A.Next, S.C)
       .transition(S.C, A.Next, S.A)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     for (let index = 0; index < 9; index++) {
       assert.equal(declared.has(service.state), true)
@@ -213,7 +213,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .context(() => ({ ok: true }))
       .transition(S.A, [A.Known, guard], S.B)
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
 
     assert.throws(() => {
       service.do('UNKNOWN_ACTION' as never)
@@ -262,15 +262,15 @@ describe('Lean tranche alignment (P1–P6)', () => {
         .transition(S.B, A.Expand, S.C)
         .transition(S.B, A.Expand, S.D)
 
-    const fromAExpanded = interpret(buildExpanded(S.A))
-    const fromAExplicit = interpret(buildExplicit(S.A))
+    const fromAExpanded = interpret(buildExpanded(S.A).done())
+    const fromAExplicit = interpret(buildExplicit(S.A).done())
 
     assert.equal(fromAExpanded.do(A.Expand), fromAExplicit.do(A.Expand))
     assert.equal(fromAExpanded.state, fromAExplicit.state)
     assert.equal(fromAExpanded.state, S.C)
 
-    const fromBExpanded = interpret(buildExpanded(S.B))
-    const fromBExplicit = interpret(buildExplicit(S.B))
+    const fromBExpanded = interpret(buildExpanded(S.B).done())
+    const fromBExplicit = interpret(buildExplicit(S.B).done())
 
     assert.equal(fromBExpanded.do(A.Expand), fromBExplicit.do(A.Expand))
     assert.equal(fromBExpanded.state, fromBExplicit.state)
@@ -342,7 +342,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
       .action('Go')
       .transition('A', 'Go', 'B')
 
-    const service = interpret(machine)
+    const service = interpret(machine.done())
     let calls = 0
     const sub = () => {
       calls++
@@ -363,7 +363,7 @@ describe('Lean tranche alignment (P1–P6)', () => {
     const child = stateMachine().state('g').initial('g').action('X').transition('g', 'X', 'g')
 
     try {
-      stateMachine().state('Root').compose('g', child)
+      stateMachine().state('Root').compose('g', child.done())
       assert.fail('expected error')
     } catch (error) {
       assert.ok(isStateMachineError(error))
