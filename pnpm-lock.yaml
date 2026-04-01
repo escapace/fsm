@@ -12,8 +12,8 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       coastal:
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.3.0
+        version: 0.3.0
       es-toolkit:
         specifier: ^1.45.1
         version: 1.45.1
@@ -1525,9 +1525,9 @@ packages:
     resolution: {integrity: sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==}
     engines: {node: '>=12'}
 
-  coastal@0.2.1:
-    resolution: {integrity: sha512-s5AhcJw8/kSgDjR5xs1ROF81Z6sPhphBDAywkEJDp4WJ39JOhfSiAYoRiSJ506GKlis57/mq7yTBPPQxZEeJkw==}
-    engines: {pnpm: ^10.10.0}
+  coastal@0.3.0:
+    resolution: {integrity: sha512-kXDPF3D2SA3sn6MEXa2ESfRg4U6t9p7M/IX7gL3aOTlyK+w1oo64rE2tlz0z/jFOU7tyyCxl+REHHVQbBk3b+A==}
+    engines: {pnpm: '>=10.29.2'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -4681,7 +4681,7 @@ snapshots:
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
 
-  coastal@0.2.1: {}
+  coastal@0.3.0: {}
 
   color-convert@2.0.1:
     dependencies:
