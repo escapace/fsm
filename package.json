@@ -16,7 +16,7 @@
     "@vitest/coverage-v8": "4.1.2",
     "@xstate/fsm": "2.1.0",
     "alien-deepsignals": "0.3.1",
-    "eslint": "9.39.4",
+    "eslint": "10.1.0",
     "eslint-config-escapace": "5.15.0",
     "esroll": "1.1.5",
     "knip": "6.1.1",
