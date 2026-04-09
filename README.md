@@ -338,18 +338,6 @@ Composition stays flat at runtime.
 - `.context(...).compose(...)` and `.compose(...).context(...)` produce the same compound context shape
 - a child used only through composition may omit its own initial state when transitions target explicit child states
 
-## `reconcile(...)`
-
-Reducers may mutate and return the current context value or return a fresh one.
-
-On direct live root dispatch, a fresh reducer result becomes `service.context` directly. Draft commit and composed child updates use the machine’s `reconcileContext` policy. When no custom policy is configured, the default policy uses `reconcile(parentContext, nextContext)`. This path reconciles into the existing parent or live context graph when possible rather than blindly replacing the whole value.
-
-For ordinary mutable object surfaces, reconciliation preserves compatible subtree identity where possible while rebuilding the result to match the next graph. That includes next-key order, sparse-array holes, cycles, shared-reference topology, and compatible `Date`, `Map`, `Set`, `ArrayBuffer`, `DataView`, and typed-array instances in place.
-
-When either side is not object-like, reconciliation returns `nextContext`.
-
-Plain-object reconciliation does not preserve arbitrary property-descriptor behavior such as accessors, non-enumerability, or non-configurable retained properties. Publication also does not eagerly validate that the resulting graph stays snapshot-safe for future drafts.
-
 ## Errors
 
 All library-thrown contract and lifecycle errors are `StateMachineError` instances. The human-readable message is paired with a structured `cause.type` that can be inspected programmatically.
@@ -385,4 +373,4 @@ A few boundaries are deliberate:
 
 ## Performance
 
-`@escapace/fsm` shows about 11.5x higher throughput than `@xstate/fsm` in the repository’s representative benchmark (guarded transitions with immutable context updates), while a handwritten baseline is about 7.7x faster than `@escapace/fsm`, indicating the remaining abstraction cost versus direct state updates. These figures come from microbenchmarks run in tight loops in a controlled single-process setup, so they measure transition-dispatch overhead rather than end-to-end application latency.
+`@escapace/fsm` shows about 52.49x higher throughput than `xstate` and about 4.34x higher throughput than `yay-machine` in the repository’s representative benchmark (guarded transitions with immutable context updates), indicating the remaining abstraction cost versus direct state updates. These figures come from microbenchmarks run in tight loops in a controlled single-process setup, so they measure transition-dispatch overhead rather than end-to-end application latency.
