@@ -8,7 +8,7 @@ It fits event-driven logic with one explicit current state, one explicit context
 Install the package and its peer dependencies:
 
 ```bash
-pnpm add @escapace/fsm coastal @escapace/typelevel
+pnpm add @escapace/fsm
 ```
 
 ## Quick start
