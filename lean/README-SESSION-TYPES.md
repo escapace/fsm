@@ -47,13 +47,13 @@ These are either future extensions or implementation details. The proofs target 
 
 The design is informed by the CFSM/MPST literature, specifically:
 
-- Deniélou and Yoshida, *Multiparty Session Types Meet Communicating Automata* (ESOP 2012)
-- Deniélou and Yoshida, *Multiparty Compatibility in Communicating Automata* (2013)
-- Lange and Yoshida, *Verifying Asynchronous Interactions via Communicating Session Automata* (2019)
-- Majumdar, Mukund, Stutz, and Zufferey, *Generalising Projection in Asynchronous Multiparty Session Types* (CONCUR 2021)
-- Li, Stutz, Wies, and Zufferey, *Complete Multiparty Session Type Projection with Automata* (CAV 2023)
-- Tirore, Bengtson, and Carbone, *A Sound and Complete Projection for Global Types* (ITP 2023)
-- Tirore, Bengtson, and Carbone, *Multiparty Asynchronous Session Types: A Mechanised Proof of Subject Reduction* (ECOOP 2025)
+- Deniélou and Yoshida, _Multiparty Session Types Meet Communicating Automata_ (ESOP 2012)
+- Deniélou and Yoshida, _Multiparty Compatibility in Communicating Automata_ (2013)
+- Lange and Yoshida, _Verifying Asynchronous Interactions via Communicating Session Automata_ (2019)
+- Majumdar, Mukund, Stutz, and Zufferey, _Generalising Projection in Asynchronous Multiparty Session Types_ (CONCUR 2021)
+- Li, Stutz, Wies, and Zufferey, _Complete Multiparty Session Type Projection with Automata_ (CAV 2023)
+- Tirore, Bengtson, and Carbone, _A Sound and Complete Projection for Global Types_ (ITP 2023)
+- Tirore, Bengtson, and Carbone, _Multiparty Asynchronous Session Types: A Mechanised Proof of Subject Reduction_ (ECOOP 2025)
 
 The key conclusions carried forward: endpoint automata are the correct local artifact; syntax-directed projection should separate projectability from translation; richer asynchronous semantics should not be imported into the first proof phase.
 
@@ -258,12 +258,12 @@ Boundary dispatch is deterministic given fixed guard behavior, fixed `deriveEffe
 
 The boundary dispatch result type (§2.2) maps to runtime behavior as follows:
 
-| Result | Runtime behavior | Rationale |
-| --- | --- | --- |
-| `unknownAction` | **Throw** | Consistent with EFSM layer (§2.1 of `lean/README.md`). An undeclared action is a programming error. |
-| `machineFailure` | **Return `false`** | Consistent with EFSM layer (§2.4 of `lean/README.md`). No candidates or all guards failed. |
+| Result              | Runtime behavior              | Rationale                                                                                                                                                  |
+| ------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unknownAction`     | **Throw**                     | Consistent with EFSM layer (§2.1 of `lean/README.md`). An undeclared action is a programming error.                                                        |
+| `machineFailure`    | **Return `false`**            | Consistent with EFSM layer (§2.4 of `lean/README.md`). No candidates or all guards failed.                                                                 |
 | `protocolViolation` | **Throw `ProtocolViolation`** | The `deriveEffect` configuration is inconsistent with the endpoint automaton at the current state. This is a configuration error, not a runtime condition. |
-| `success` | **Return `true`** | Consistent with EFSM layer (§2.5 of `lean/README.md`). |
+| `success`           | **Return `true`**             | Consistent with EFSM layer (§2.5 of `lean/README.md`).                                                                                                     |
 
 The Lean model uses algebraic result types without distinguishing throw from return. The mapping above is the runtime convention.
 
@@ -301,12 +301,12 @@ Receive-side boundary selection is deterministic given fixed endpoint transition
 
 ### 3.7 — Receive error behavior
 
-| Result | Runtime behavior | Rationale |
-| --- | --- | --- |
-| `protocolViolation` | **Throw `ProtocolViolation`** | The inbound label is not admitted by the current endpoint state. |
-| `unknownAction` | **Throw** | The receive mapping has no entry for the label. Configuration error. |
-| `machineFailure` | **Return `false`** | The mapped action's guards failed or no candidates exist. |
-| `success` | **Return `true`** | |
+| Result              | Runtime behavior              | Rationale                                                            |
+| ------------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `protocolViolation` | **Throw `ProtocolViolation`** | The inbound label is not admitted by the current endpoint state.     |
+| `unknownAction`     | **Throw**                     | The receive mapping has no entry for the label. Configuration error. |
+| `machineFailure`    | **Return `false`**            | The mapped action's guards failed or no candidates exist.            |
+| `success`           | **Return `true`**             |                                                                      |
 
 ## 4 — Replay and draft semantics
 
@@ -855,13 +855,13 @@ Each endpoint transition traces to a source graph interaction with matching `id`
 
 The projection semantics adopts the following commitments. These are not incidental implementation properties; later theorem statements may quantify over them.
 
-| Commitment | Semantic content |
-| --- | --- |
-| Deterministic normalization | Fixed input and identifier strategy produce a unique normalized graph. |
-| Deterministic projection | Fixed normalized graph and identifier strategy produce unique endpoint automata. |
-| Stable label identity | Generated `ProtocolLabel.id` values are stable across regeneration from the same source. |
-| Stable endpoint-state identity | Endpoint states are characterized by silent-closure equivalence classes over the normalized graph. |
-| Stable endpoint-transition identity | Each transition traces to a source graph interaction with matching id and message fields. |
+| Commitment                          | Semantic content                                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Deterministic normalization         | Fixed input and identifier strategy produce a unique normalized graph.                             |
+| Deterministic projection            | Fixed normalized graph and identifier strategy produce unique endpoint automata.                   |
+| Stable label identity               | Generated `ProtocolLabel.id` values are stable across regeneration from the same source.           |
+| Stable endpoint-state identity      | Endpoint states are characterized by silent-closure equivalence classes over the normalized graph. |
+| Stable endpoint-transition identity | Each transition traces to a source graph interaction with matching id and message fields.          |
 
 ## 13 — Out of scope
 
@@ -883,29 +883,29 @@ The Lean proof files in `lean/` encode and verify the semantic properties listed
 
 ### Protocol-boundary files
 
-| File | Content | Properties |
-| --- | --- | --- |
-| `ProtocolDefs.lean` | Protocol labels, endpoint transitions/automata, boundary snapshots, event kinds, result types | — |
-| `ProtocolDispatch.lean` | `endpointCandidates`, `boundaryDispatch`, helper lemmas | — |
-| `ProtocolReplay.lean` | `applyBoundarySelected`, `replayBoundaryTrace`, append law | PB5 |
-| `ProtocolDraft.lean` | Boundary drafts, root commit, publication sequence | PB6, PB7, PB7a, PB8 |
-| `ProtocolSoundness.lean` | Boundary determinism, preservation, send soundness, violation characterization | PB1–PB4 |
-| `ProtocolReceiveDefs.lean` | External receive events, receive-capable boundary step/draft types | — |
-| `ProtocolReceiveDispatch.lean` | `boundaryReceive`, receive-side helpers | — |
-| `ProtocolReceiveReplay.lean` | Receive-aware replay and append law | PR4, PR5 |
-| `ProtocolReceiveDraft.lean` | Receive-aware drafts and root commit | PR6, PR7, PR7a |
-| `ProtocolReceiveSoundness.lean` | Receive determinism, legality, violation characterization | PR1–PR3 |
+| File                            | Content                                                                                       | Properties          |
+| ------------------------------- | --------------------------------------------------------------------------------------------- | ------------------- |
+| `ProtocolDefs.lean`             | Protocol labels, endpoint transitions/automata, boundary snapshots, event kinds, result types | —                   |
+| `ProtocolDispatch.lean`         | `endpointCandidates`, `boundaryDispatch`, helper lemmas                                       | —                   |
+| `ProtocolReplay.lean`           | `applyBoundarySelected`, `replayBoundaryTrace`, append law                                    | PB5                 |
+| `ProtocolDraft.lean`            | Boundary drafts, root commit, publication sequence                                            | PB6, PB7, PB7a, PB8 |
+| `ProtocolSoundness.lean`        | Boundary determinism, preservation, send soundness, violation characterization                | PB1–PB4             |
+| `ProtocolReceiveDefs.lean`      | External receive events, receive-capable boundary step/draft types                            | —                   |
+| `ProtocolReceiveDispatch.lean`  | `boundaryReceive`, receive-side helpers                                                       | —                   |
+| `ProtocolReceiveReplay.lean`    | Receive-aware replay and append law                                                           | PR4, PR5            |
+| `ProtocolReceiveDraft.lean`     | Receive-aware drafts and root commit                                                          | PR6, PR7, PR7a      |
+| `ProtocolReceiveSoundness.lean` | Receive determinism, legality, violation characterization                                     | PR1–PR3             |
 
 ### Projection files
 
-| File | Content | Properties |
-| --- | --- | --- |
-| `ProjectionDefs.lean` | Source protocol syntax, normalized graph, rejection classes | — |
-| `ProjectionNormalize.lean` | `normalizeSyntax`, `buildGraph`, `normalizeProtocol`, normalization-shape theorems | — |
-| `ProjectionProject.lean` | `projStepFn`, `projectRole`, `projectProtocol`, lookup lemmas | PJ1, PJ2 |
-| `ProjectionPaths.lean` | Graph/endpoint path types, role-local view, compressed-trace bridge, trace-set equivalence | — |
-| `ProjectionInvariants.lean` | Fold invariants, origin construction, transition-to-edge mapping, PJ3, PJ4, PJ5 | PJ3, PJ4, PJ5 |
-| `ProjectionSoundness.lean` | End-to-end trace equality, endpoint-state/transition identity theorems | PJ4 (e2e), §12 identity |
+| File                        | Content                                                                                    | Properties              |
+| --------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
+| `ProjectionDefs.lean`       | Source protocol syntax, normalized graph, rejection classes                                | —                       |
+| `ProjectionNormalize.lean`  | `normalizeSyntax`, `buildGraph`, `normalizeProtocol`, normalization-shape theorems         | —                       |
+| `ProjectionProject.lean`    | `projStepFn`, `projectRole`, `projectProtocol`, lookup lemmas                              | PJ1, PJ2                |
+| `ProjectionPaths.lean`      | Graph/endpoint path types, role-local view, compressed-trace bridge, trace-set equivalence | —                       |
+| `ProjectionInvariants.lean` | Fold invariants, origin construction, transition-to-edge mapping, PJ3, PJ4, PJ5            | PJ3, PJ4, PJ5           |
+| `ProjectionSoundness.lean`  | End-to-end trace equality, endpoint-state/transition identity theorems                     | PJ4 (e2e), §12 identity |
 
 ### Implementation notes
 

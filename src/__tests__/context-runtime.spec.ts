@@ -270,7 +270,7 @@ const createDiscriminatedRootMachine = (createLive: ReactiveContextCase['createL
     .initial('Idle')
     .action('STEP')
     .context<ReactiveDiscriminatedRootContext>(() =>
-      createLive<ReactiveDiscriminatedIdleContext>({
+      createLive({
         list: [1],
         nested: { count: 0 },
         state: 'Idle',
@@ -290,7 +290,7 @@ const createDiscriminatedComposedMachine = (createLive: ReactiveContextCase['cre
     .initial('ChildA')
     .action('STEP')
     .context<ReactiveDiscriminatedChildContext>(() =>
-      createLive<ReactiveDiscriminatedChildAContext>({
+      createLive({
         list: [1],
         nested: { count: 0 },
         state: 'ChildA',

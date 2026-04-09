@@ -1,13 +1,12 @@
 /* eslint-disable unicorn/prevent-abbreviations */
 
-import { remove, szudzik, type DirectAddressTable } from 'coastal'
+import { isObject, remove, szudzik, type DirectAddressTable } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { STATE_MACHINE_STATE } from './constants'
-import { reconcile, snapshot } from './context-runtime'
+import { reconcile, snapshot } from '@escapace/reconcile'
 import { StateMachineError } from './error'
 import { resolveOwnOption } from './internal-options'
 import { CHILD_GROUP, type GroupScopedReducer } from './internal-policy'
-import { isObject } from './is-object'
 import type {
   InferStateMachineModel,
   StateMachineDraftStatus,

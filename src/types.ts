@@ -106,10 +106,13 @@ export interface StateMachineContextPolicy<TContext = unknown> {
 export interface StateMachineDoneOptions<
   TBuilderModel extends StateMachineBuilderModel = StateMachineBuilderModel,
 > {
-  reconcileContext?: StateMachineContextPolicy<
-    TBuilderModel['state']['context']
-  >['reconcileContext']
-  snapshotContext?: StateMachineContextPolicy<TBuilderModel['state']['context']>['snapshotContext']
+  reconcileContext?: (
+    parentContext: TBuilderModel['state']['context'],
+    nextContext: TBuilderModel['state']['context'],
+  ) => TBuilderModel['state']['context']
+  snapshotContext?: (
+    context: TBuilderModel['state']['context'],
+  ) => TBuilderModel['state']['context']
 }
 
 export type StateMachineDefinitionState<

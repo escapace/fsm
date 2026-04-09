@@ -75,7 +75,7 @@ const parseCLI = (argv: string[]): CLIOptions => {
     options: {
       'bench-current': { type: 'string' },
       'bench-previous': { type: 'string' },
-      json: { default: false, type: 'boolean' },
+      'json': { default: false, type: 'boolean' },
       'profile-current': { type: 'string' },
       'profile-previous': { type: 'string' },
     },
@@ -107,7 +107,8 @@ const parseCLI = (argv: string[]): CLIOptions => {
   }
 }
 
-const ratioKey = (groupName: string, benchmarkName: string): string => `${groupName} :: ${benchmarkName}`
+const ratioKey = (groupName: string, benchmarkName: string): string =>
+  `${groupName} :: ${benchmarkName}`
 
 const extractBenchRatios = (input: VitestBenchmarkOutput): Map<string, BenchRatioEntry> => {
   const ratios = new Map<string, BenchRatioEntry>()
@@ -252,10 +253,18 @@ const formatSignedOptional = (value: number | null, digits: number, suffix = '')
 
 const printTextReport = (benchDeltas: BenchRatioDelta[], profile: ProfileComparison): void => {
   console.log('Sign guide:')
-  console.log('  - Bench ratioPointDelta: current normalized ratio minus previous normalized ratio. Positive means improvement; negative means regression.')
-  console.log('  - Bench relativeDelta: signed percent change magnitude vs previous normalized ratio, using |previous| as denominator. Positive means improvement; negative means regression.')
-  console.log('  - Profile delta: previous normalized metric minus current normalized metric. Positive means improvement; negative means regression.')
-  console.log('  - Profile relativeDelta: signed percent change magnitude vs previous normalized metric, using |previous| as denominator. Positive means improvement; negative means regression.')
+  console.log(
+    '  - Bench ratioPointDelta: current normalized ratio minus previous normalized ratio. Positive means improvement; negative means regression.',
+  )
+  console.log(
+    '  - Bench relativeDelta: signed percent change magnitude vs previous normalized ratio, using |previous| as denominator. Positive means improvement; negative means regression.',
+  )
+  console.log(
+    '  - Profile delta: previous normalized metric minus current normalized metric. Positive means improvement; negative means regression.',
+  )
+  console.log(
+    '  - Profile relativeDelta: signed percent change magnitude vs previous normalized metric, using |previous| as denominator. Positive means improvement; negative means regression.',
+  )
   console.log('  - Non-zero numeric values include an explicit sign; exact zero is printed as 0.')
   console.log('')
   console.log('Benchmark normalized ratio deltas (current vs previous accepted):')
@@ -268,7 +277,9 @@ const printTextReport = (benchDeltas: BenchRatioDelta[], profile: ProfileCompari
   }
 
   console.log('')
-  console.log('Profile normalized decomposition + relationship deltas (current vs previous accepted):')
+  console.log(
+    'Profile normalized decomposition + relationship deltas (current vs previous accepted):',
+  )
 
   for (const key of Object.keys(profile.delta).sort()) {
     const delta = profile.delta[key]
@@ -310,7 +321,10 @@ const main = (): void => {
   const profilePrevious = loadJsonFile<ProfileAnalysis>(options.profilePrevious)
   const profileCurrent = loadJsonFile<ProfileAnalysis>(options.profileCurrent)
 
-  const benchDeltas = compareBenchRatios(extractBenchRatios(benchPrevious), extractBenchRatios(benchCurrent))
+  const benchDeltas = compareBenchRatios(
+    extractBenchRatios(benchPrevious),
+    extractBenchRatios(benchCurrent),
+  )
   const profileComparison = compareProfile(profilePrevious, profileCurrent)
 
   if (options.json) {

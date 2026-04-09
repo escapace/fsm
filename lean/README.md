@@ -426,14 +426,14 @@ These errors are raised during machine construction (builder calls), not during 
 
 ## 8 — Draft-time errors
 
-| Condition                                         | Behavior                     |
-| ------------------------------------------------- | ---------------------------- |
-| `do(...)` on a closed draft                       | Throws `DraftClosed`         |
-| `do(...)` on a draft with a closed ancestor       | Throws `DraftClosed`         |
-| `draft()` on a closed draft                       | Throws `DraftClosed`         |
-| `commit()` on a closed draft                      | Throws `DraftClosed`         |
-| `discard()` on a closed draft                     | Throws `DraftClosed`         |
-| `commit()` when parent cursor ≠ `baseCursor`      | Throws `DraftCommitConflict` |
+| Condition                                    | Behavior                     |
+| -------------------------------------------- | ---------------------------- |
+| `do(...)` on a closed draft                  | Throws `DraftClosed`         |
+| `do(...)` on a draft with a closed ancestor  | Throws `DraftClosed`         |
+| `draft()` on a closed draft                  | Throws `DraftClosed`         |
+| `commit()` on a closed draft                 | Throws `DraftClosed`         |
+| `discard()` on a closed draft                | Throws `DraftClosed`         |
+| `commit()` when parent cursor ≠ `baseCursor` | Throws `DraftCommitConflict` |
 
 ## 9 — Properties for Lean verification
 

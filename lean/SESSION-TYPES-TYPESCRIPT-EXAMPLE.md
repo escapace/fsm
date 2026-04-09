@@ -123,11 +123,7 @@ const uploaderMachine = stateMachine()
   )
 
   // Requesting → Failed: storage denies the slot
-  .transition(
-    UploaderState.Requesting,
-    UploaderAction.SlotDenied,
-    UploaderState.Failed,
-  )
+  .transition(UploaderState.Requesting, UploaderAction.SlotDenied, UploaderState.Failed)
 
   // Uploading → Uploading: send a data chunk
   .transition(
@@ -154,10 +150,7 @@ const uploaderMachine = stateMachine()
   // Uploading → Done: all chunks sent and acknowledged
   .transition(
     UploaderState.Uploading,
-    [
-      UploaderAction.Complete,
-      (ctx) => ctx.offset >= ctx.totalSize,
-    ],
+    [UploaderAction.Complete, (ctx) => ctx.offset >= ctx.totalSize],
     UploaderState.Done,
   )
 ```
@@ -213,20 +206,40 @@ const fileTransfer = protocol()
   // runtime rejection.
 
   .body(({ interact, choice, loop, continueLoop, done }) =>
-    interact('req', 'uploader', 'storage', 'RequestSlot',
+    interact(
+      'req',
+      'uploader',
+      'storage',
+      'RequestSlot',
       choice('storage', [
-        ['granted', interact('grant', 'storage', 'uploader', 'SlotGranted',
-          loop('transfer',
-            interact('chunk', 'uploader', 'storage', 'SendChunk',
-              interact('ack', 'storage', 'uploader', 'Ack',
-                choice('uploader', [
-                  ['more', continueLoop('transfer')],
-                  ['finish', interact('cmp', 'uploader', 'storage', 'Complete', done)],
-                ]),
+        [
+          'granted',
+          interact(
+            'grant',
+            'storage',
+            'uploader',
+            'SlotGranted',
+            loop(
+              'transfer',
+              interact(
+                'chunk',
+                'uploader',
+                'storage',
+                'SendChunk',
+                interact(
+                  'ack',
+                  'storage',
+                  'uploader',
+                  'Ack',
+                  choice('uploader', [
+                    ['more', continueLoop('transfer')],
+                    ['finish', interact('cmp', 'uploader', 'storage', 'Complete', done)],
+                  ]),
+                ),
               ),
             ),
           ),
-        )],
+        ],
         ['denied', interact('deny', 'storage', 'uploader', 'SlotDenied', done)],
       ]),
     ),
@@ -235,15 +248,15 @@ const fileTransfer = protocol()
 
 ### What the builder enforces at compile time
 
-| Constraint | Mechanism |
-| --- | --- |
-| Roles form a literal union (`'uploader' \| 'storage'`) | `.role()` accumulates into builder state |
-| Duplicate role / message rejected | `Exclude<U, Declared>` on parameter type |
-| Sender and receiver ∈ role set | Body helpers constrain to `Roles` |
-| Sender ≠ receiver | Receiver typed as `Exclude<Roles, Sender>` |
-| Message ∈ declared message set | Body helpers constrain to `Messages` |
-| Chooser ∈ role set | `choice()` first parameter constrained to `Roles` |
-| Message payload types propagate downstream | Boundary `deriveReceiveStep` infers payload per message |
+| Constraint                                             | Mechanism                                               |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Roles form a literal union (`'uploader' \| 'storage'`) | `.role()` accumulates into builder state                |
+| Duplicate role / message rejected                      | `Exclude<U, Declared>` on parameter type                |
+| Sender and receiver ∈ role set                         | Body helpers constrain to `Roles`                       |
+| Sender ≠ receiver                                      | Receiver typed as `Exclude<Roles, Sender>`              |
+| Message ∈ declared message set                         | Body helpers constrain to `Messages`                    |
+| Chooser ∈ role set                                     | `choice()` first parameter constrained to `Roles`       |
+| Message payload types propagate downstream             | Boundary `deriveReceiveStep` infers payload per message |
 
 ### What remains a runtime check
 
@@ -275,7 +288,7 @@ if (!projection.ok) {
 // projection.endpoints is [['uploader', EndpointAutomaton], ['storage', EndpointAutomaton]]
 const [, uploaderEndpoint] = projection.endpoints.find(([role]) => role === 'uploader')!
 // The storage role's endpoint would be used to construct the storage-side boundary.
-const [, storageEndpoint]  = projection.endpoints.find(([role]) => role === 'storage')!
+const [, storageEndpoint] = projection.endpoints.find(([role]) => role === 'storage')!
 ```
 
 Properties guaranteed by successful projection:
@@ -302,8 +315,8 @@ const uploaderService = boundary({
   // Actions not listed produce ProtocolEffect.none (local-only).
   deriveEffect: {
     [UploaderAction.RequestSlot]: () => ({ send: 'RequestSlot' }),
-    [UploaderAction.SendChunk]:   () => ({ send: 'SendChunk' }),
-    [UploaderAction.Complete]:    () => ({ send: 'Complete' }),
+    [UploaderAction.SendChunk]: () => ({ send: 'SendChunk' }),
+    [UploaderAction.Complete]: () => ({ send: 'Complete' }),
   },
 
   // §1.10 — Map inbound protocol labels to local machine actions.
@@ -320,8 +333,8 @@ const uploaderService = boundary({
   // annotation at every entry.
   deriveReceiveStep: {
     SlotGranted: (payload) => ({ action: UploaderAction.SlotGranted, payload }),
-    SlotDenied:  (payload) => ({ action: UploaderAction.SlotDenied,  payload }),
-    Ack:         (payload) => ({ action: UploaderAction.Ack,         payload }),
+    SlotDenied: (payload) => ({ action: UploaderAction.SlotDenied, payload }),
+    Ack: (payload) => ({ action: UploaderAction.Ack, payload }),
   },
 })
 ```
@@ -346,8 +359,8 @@ const sent = uploaderService.do(UploaderAction.RequestSlot, {
   sizeBytes: 131_072, // 128 KB — two 64 KB chunks
 })
 
-console.log(sent)                          // true
-console.log(uploaderService.state)         // 'Requesting'
+console.log(sent) // true
+console.log(uploaderService.state) // 'Requesting'
 console.log(uploaderService.endpointState) // endpoint state after 'RequestSlot' send transition
 ```
 
@@ -360,11 +373,11 @@ What happens under the hood:
 
 ### Error cases
 
-| Outcome | Runtime behavior |
-| --- | --- |
-| Undeclared action | Throw (consistent with EFSM §2.1) |
-| Guards fail / no candidates | Return `false`, snapshot unchanged |
-| Protocol violation (send label not legal at current endpoint state) | Throw `ProtocolViolation` |
+| Outcome                                                             | Runtime behavior                   |
+| ------------------------------------------------------------------- | ---------------------------------- |
+| Undeclared action                                                   | Throw (consistent with EFSM §2.1)  |
+| Guards fail / no candidates                                         | Return `false`, snapshot unchanged |
+| Protocol violation (send label not legal at current endpoint state) | Throw `ProtocolViolation`          |
 
 ---
 
@@ -381,8 +394,8 @@ const received = uploaderService.receive({
   payload: { slotId: 'slot-42', maxChunkBytes: 65_536 },
 })
 
-console.log(received)                      // true
-console.log(uploaderService.state)         // 'Uploading'
+console.log(received) // true
+console.log(uploaderService.state) // 'Uploading'
 console.log(uploaderService.endpointState) // endpoint state after 'SlotGranted' receive transition
 ```
 
@@ -463,7 +476,7 @@ draft.receive({
 // Guard check: offset >= totalSize
 draft.do(UploaderAction.Complete)
 
-console.log(draft.state)  // 'Done'
+console.log(draft.state) // 'Done'
 // Live service is still in 'Uploading' — draft is isolated.
 console.log(uploaderService.state) // 'Uploading'
 ```
@@ -576,11 +589,7 @@ When the source protocol violates structural requirements, projection returns a 
 //
 // Other structural violations surface at projection time:
 
-const badProtocol = protocol()
-  .role('a')
-  .role('b')
-  .message<'Ping'>('Ping')
-  .message<'Ping'>('Ping')   // ← compile error: 'Ping' already declared
+const badProtocol = protocol().role('a').role('b').message<'Ping'>('Ping').message<'Ping'>('Ping') // ← compile error: 'Ping' already declared
 ```
 
 Structural issues that pass compile-time checks (e.g., duplicate interaction IDs
@@ -596,36 +605,36 @@ if (!result.ok) {
 
 Rejection classes (§7.7):
 
-| Rejection | Cause |
-| --- | --- |
-| `undeclaredRole` | Role in an interaction not in the declared set |
-| `duplicateInteractionId` | Two interactions share an ID |
-| `nonFiniteStateProtocol` | Normalization produces an unbounded graph |
-| `nonSingleChooser` | A choice has multiple chooser roles |
-| `nonProjectableChoice` | Confluence check fails for an uninvolved role |
+| Rejection                        | Cause                                           |
+| -------------------------------- | ----------------------------------------------- |
+| `undeclaredRole`                 | Role in an interaction not in the declared set  |
+| `duplicateInteractionId`         | Two interactions share an ID                    |
+| `nonFiniteStateProtocol`         | Normalization produces an unbounded graph       |
+| `nonSingleChooser`               | A choice has multiple chooser roles             |
+| `nonProjectableChoice`           | Confluence check fails for an uninvolved role   |
 | `parallelCompositionUnsupported` | Reserved; not currently emitted by the pipeline |
 
 ---
 
 ## 11 — Feature summary
 
-| Feature | Spec reference | Demonstrated in |
-| --- | --- | --- |
-| Local EFSM (states, actions, guards, reducers, context) | `README.md` §1–§3 | §1 |
-| Protocol builder (roles, messages with typed payloads) | Session-types §7.2–§7.4 | §2 |
-| Protocol body (interact, choice, loop, done) | Session-types §7.4 | §2 |
-| Compile-time role/message validation | — (type-level) | §2, §10 |
-| Projection to endpoint automata | Session-types §10 | §3 |
-| Boundary construction with effect/receive maps | Session-types §1.8, §1.10 | §4 |
-| Typed receive payloads via message declarations | — (type-level) | §4, §6 |
-| Outbound dispatch (local-only and protocol-send) | Session-types §2.1–§2.5 | §5 |
-| Inbound receive with endpoint-first checking | Session-types §3.1–§3.5 | §6 |
-| Subscriptions with endpoint-state read | Session-types §4.9 | §7 |
-| Protocol-aware drafts (root, commit, conflict) | Session-types §4.4–§4.8 | §8 |
-| Nested boundary drafts (future) | Session-types §13 | §8 |
-| Protocol violation detection (send and receive) | Session-types §2.5, §3.3 | §9 |
-| Projection rejection with typed reasons | Session-types §7.7, §10.8 | §10 |
-| Composition (flat EFSM feature, orthogonal) | `README.md` §11 | — |
+| Feature                                                 | Spec reference            | Demonstrated in |
+| ------------------------------------------------------- | ------------------------- | --------------- |
+| Local EFSM (states, actions, guards, reducers, context) | `README.md` §1–§3         | §1              |
+| Protocol builder (roles, messages with typed payloads)  | Session-types §7.2–§7.4   | §2              |
+| Protocol body (interact, choice, loop, done)            | Session-types §7.4        | §2              |
+| Compile-time role/message validation                    | — (type-level)            | §2, §10         |
+| Projection to endpoint automata                         | Session-types §10         | §3              |
+| Boundary construction with effect/receive maps          | Session-types §1.8, §1.10 | §4              |
+| Typed receive payloads via message declarations         | — (type-level)            | §4, §6          |
+| Outbound dispatch (local-only and protocol-send)        | Session-types §2.1–§2.5   | §5              |
+| Inbound receive with endpoint-first checking            | Session-types §3.1–§3.5   | §6              |
+| Subscriptions with endpoint-state read                  | Session-types §4.9        | §7              |
+| Protocol-aware drafts (root, commit, conflict)          | Session-types §4.4–§4.8   | §8              |
+| Nested boundary drafts (future)                         | Session-types §13         | §8              |
+| Protocol violation detection (send and receive)         | Session-types §2.5, §3.3  | §9              |
+| Projection rejection with typed reasons                 | Session-types §7.7, §10.8 | §10             |
+| Composition (flat EFSM feature, orthogonal)             | `README.md` §11           | —               |
 
 ---
 

@@ -1,10 +1,9 @@
 /* eslint-disable typescript/prefer-includes, typescript/no-explicit-any */
 
-import { DirectAddressTable, szudzik } from 'coastal'
+import { DirectAddressTable, isObject, szudzik } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { CONTEXT_SOURCE_ORIGIN, STATE_MACHINE_STATE } from './constants'
-import { reconcile, snapshot } from './context-runtime'
-import { isObject } from './is-object'
+import { reconcile, snapshot } from '@escapace/reconcile'
 import { StateMachineError } from './error'
 import { resolveOwnFunctionOption } from './internal-options'
 import { CHILD_GROUP, type GroupScopedReducer } from './internal-policy'
@@ -470,7 +469,7 @@ const transition =
     const next = product(
       Array.isArray(source) ? source : [source],
       Array.isArray(target) ? target : [target],
-    ).reduce<StateMachineBuilderModel>(
+    ).reduce(
       (accumulator, [source, target]) =>
         reduce(accumulator, {
           payload: {

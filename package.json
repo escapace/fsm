@@ -13,13 +13,13 @@
     "@escapace/pnpm-pack": "0.8.0",
     "@escapace/syncpack-configuration": "0.1.0",
     "@ls-lint/ls-lint": "2.3.1",
-    "@vitest/coverage-v8": "4.0.18",
+    "@vitest/coverage-v8": "4.1.2",
     "@xstate/fsm": "2.1.0",
     "alien-deepsignals": "0.3.1",
     "eslint": "10.1.0",
     "eslint-config-escapace": "5.16.0",
     "esroll": "1.1.5",
-    "knip": "6.1.1",
+    "knip": "6.2.0",
     "lefthook": "2.1.4",
     "prettier": "3.8.1",
     "prettier-config-escapace": "1.2.2",
@@ -28,7 +28,7 @@
     "typescript": "5.9.3",
     "vitest": "4.1.2",
     "vue": "3.5.31",
-    "xstate": "5.28.0",
+    "xstate": "5.30.0",
     "yay-machine": "1.5.0"
   },
   "engines": {
@@ -48,6 +48,7 @@
   "license": "MPL-2.0",
   "module": "lib/neutral/index.js",
   "peerDependencies": {
+    "@escapace/reconcile": "^0.1.0",
     "@escapace/typelevel": "^2.0.3",
     "coastal": "^0.4.0",
     "es-toolkit": "^1.45.1"

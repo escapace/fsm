@@ -10,7 +10,7 @@ export type {
   StateMachineErrorType,
 } from './error'
 export { STATE_MACHINE_STATE } from './constants'
-export { reconcile } from './context-runtime'
+export { reconcile } from '@escapace/reconcile'
 export { interpret } from './interpret'
 export { stateMachine } from './state-machine'
 export * from './types'

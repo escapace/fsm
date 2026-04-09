@@ -12,12 +12,12 @@
 
 1. One focused hypothesis per iteration.
 2. Validation order per iteration:
-   1) `pnpm run typecheck`
-   2) `pnpm run test`
+   1. `pnpm run typecheck`
+   2. `pnpm run test`
 3. Measurement order per iteration (profile first):
-   1) `pnpm run profile`
-   2) capture `RUN_ID`
-   3) `pnpm vitest bench --run perf/fsm.bench.ts --outputJson perf/profiles/<RUN_ID>/bench.json`
+   1. `pnpm run profile`
+   2. capture `RUN_ID`
+   3. `pnpm vitest bench --run perf/fsm.bench.ts --outputJson perf/profiles/<RUN_ID>/bench.json`
 4. Persist artifacts in the same run folder:
    - `perf/profiles/<RUN_ID>/analysis.json`
    - `perf/profiles/<RUN_ID>/bench.json`
@@ -73,35 +73,35 @@
 
 These were explored earlier and are retained here only as “do not repeat blindly” notes.
 
-* Cached target state index in trace steps to remove lookup during commit replay — **not kept**.
-* Parent reference specialization (`parentService` / `parentDraft`) for lifecycle methods — **not kept**.
-* Historical root-draft empty fast path in `close()` — explored before the current artifact set; **not part of the current kept-change summary**.
-* Direct parent-draft references for close teardown branching — **not kept**.
-* Local alias hoists for `subscriptions` / `trace` in `close()` — **not kept**.
-* Collapsed duplicate `commit()` close/return control flow — **not kept**.
-* Precomputed root-draft boolean flag in constructor — **not kept**.
-* Reordered close fast-path checks and reused a `parent` local — **not kept**.
-* Expanded root close fast path to include non-empty traces for root commits/discards — **not kept**.
-* Guard all notification sites (`do` + replay) behind empty-subscription checks — **REVERT**.
-* Guard replay-only notification sites behind empty-subscription checks — **KEEP**.
-* Hoist repeated `this` property accesses in hot transition/commit/do/replay paths — **REVERT**.
-* Large combined pass (variable reuse + `this` access hoisting across transition/replay/do/close paths) — **REVERT**.
-* Isolate `this`-hoisting to non-commit transition/do paths only — **REVERT**.
-* Guard `DraftRuntime.do()` notification dispatch behind empty-subscription check — **KEEP**.
-* Replace trace step wrapper objects with parallel trace arrays (`traceActions` / `traceReducers`) — **REVERT** after confirmation rerun.
-* Guard `subscriptions.length = 0` and `trace.length = 0` in `close()` with non-empty checks — **KEEP**.
-* Flatten `InternalSelectedStep` and lazily reconstruct action shape via `stepAction()` — **REVERT**.
-* Remove trace array truncation from `close()` entirely — **KEEP**.
-* Replace `instanceof` parent checks with pointer equality (`parent === this.service`) — **REVERT**.
-* Make `parentChangeBuffer` lazy in `DraftRuntime` — **REVERT**.
-* Replace trace step objects with a flat `unknown[]` / stride-based trace representation — **REVERT**.
-* Manually inline `applyCommitStep` into replay sites and remove the shared prototype method — **REVERT**.
-* Convert runtime lookup structures once in `interpret()` from builder-time `Map`s to direct-access runtime structures (records + `DirectAddressTable`) — **KEEP**.
-* Single-step replay fast path in `DraftRuntime.commit()` (`traceLength === 1`) — **REVERT**.
-* Service-parent no-subscription commit replay bypass (`DraftRuntime.commit()` calls `ServiceRuntime.replayStepWithoutNotify()`) — **REVERT**.
-* Materialized-step commit replay (store post-transition draft contexts in trace and reconcile them during commit; no reducer rerun at commit boundaries) — **REVERT** (validation failure).
-* Replay-engine unification via commit sink methods (`assertReplayCursor` + `publishReplayStep` on service/draft parents) — **PENDING USER CONFIRMATION**.
-* Replay-engine DRY refinement (`replayCursor` + direct `replayStep` sink calls) — **PENDING USER CONFIRMATION**.
+- Cached target state index in trace steps to remove lookup during commit replay — **not kept**.
+- Parent reference specialization (`parentService` / `parentDraft`) for lifecycle methods — **not kept**.
+- Historical root-draft empty fast path in `close()` — explored before the current artifact set; **not part of the current kept-change summary**.
+- Direct parent-draft references for close teardown branching — **not kept**.
+- Local alias hoists for `subscriptions` / `trace` in `close()` — **not kept**.
+- Collapsed duplicate `commit()` close/return control flow — **not kept**.
+- Precomputed root-draft boolean flag in constructor — **not kept**.
+- Reordered close fast-path checks and reused a `parent` local — **not kept**.
+- Expanded root close fast path to include non-empty traces for root commits/discards — **not kept**.
+- Guard all notification sites (`do` + replay) behind empty-subscription checks — **REVERT**.
+- Guard replay-only notification sites behind empty-subscription checks — **KEEP**.
+- Hoist repeated `this` property accesses in hot transition/commit/do/replay paths — **REVERT**.
+- Large combined pass (variable reuse + `this` access hoisting across transition/replay/do/close paths) — **REVERT**.
+- Isolate `this`-hoisting to non-commit transition/do paths only — **REVERT**.
+- Guard `DraftRuntime.do()` notification dispatch behind empty-subscription check — **KEEP**.
+- Replace trace step wrapper objects with parallel trace arrays (`traceActions` / `traceReducers`) — **REVERT** after confirmation rerun.
+- Guard `subscriptions.length = 0` and `trace.length = 0` in `close()` with non-empty checks — **KEEP**.
+- Flatten `InternalSelectedStep` and lazily reconstruct action shape via `stepAction()` — **REVERT**.
+- Remove trace array truncation from `close()` entirely — **KEEP**.
+- Replace `instanceof` parent checks with pointer equality (`parent === this.service`) — **REVERT**.
+- Make `parentChangeBuffer` lazy in `DraftRuntime` — **REVERT**.
+- Replace trace step objects with a flat `unknown[]` / stride-based trace representation — **REVERT**.
+- Manually inline `applyCommitStep` into replay sites and remove the shared prototype method — **REVERT**.
+- Convert runtime lookup structures once in `interpret()` from builder-time `Map`s to direct-access runtime structures (records + `DirectAddressTable`) — **KEEP**.
+- Single-step replay fast path in `DraftRuntime.commit()` (`traceLength === 1`) — **REVERT**.
+- Service-parent no-subscription commit replay bypass (`DraftRuntime.commit()` calls `ServiceRuntime.replayStepWithoutNotify()`) — **REVERT**.
+- Materialized-step commit replay (store post-transition draft contexts in trace and reconcile them during commit; no reducer rerun at commit boundaries) — **REVERT** (validation failure).
+- Replay-engine unification via commit sink methods (`assertReplayCursor` + `publishReplayStep` on service/draft parents) — **PENDING USER CONFIRMATION**.
+- Replay-engine DRY refinement (`replayCursor` + direct `replayStep` sink calls) — **PENDING USER CONFIRMATION**.
 
 ## Current heuristic takeaways
 

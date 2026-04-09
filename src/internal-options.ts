@@ -1,4 +1,4 @@
-import { isObject } from './is-object'
+import { isObject } from 'coastal'
 
 export const resolveOwnOption = (options: unknown, key: string): unknown =>
   isObject(options) && Object.hasOwn(options, key)
