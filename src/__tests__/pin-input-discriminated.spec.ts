@@ -1,7 +1,7 @@
 import { assert, describe, it } from 'vitest'
+import { reconcile } from '@escapace/reconcile'
 import {
   interpret,
-  reconcile,
   stateMachine,
   type InferStateMachineModel,
   type StateMachineContextAtState,

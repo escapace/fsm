@@ -18,7 +18,8 @@
  * sides use the same enum type.
  */
 
-import { interpret, reconcile, stateMachine } from '../src/index'
+import { reconcile } from '@escapace/reconcile'
+import { interpret, stateMachine } from '../src/index'
 
 // ── States and actions ──────────────────────────────────────────────
 
