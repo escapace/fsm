@@ -12,8 +12,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0(coastal@0.4.0)(es-toolkit@1.45.1)
       '@escapace/typelevel':
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^2.0.5
+        version: 2.0.5
       coastal:
         specifier: ^0.4.0
         version: 0.4.0
@@ -535,8 +535,8 @@ packages:
     peerDependencies:
       syncpack: ^14.0.0
 
-  '@escapace/typelevel@2.0.3':
-    resolution: {integrity: sha512-LlaEdqvOk3YEehh3d5qdciXsV5p29GTx5XBd9pjGSAhvuiKWD2/4eOiUiUUFm1gjinJyncFOd7RXa5akPimWZQ==}
+  '@escapace/typelevel@2.0.5':
+    resolution: {integrity: sha512-laUxDzfGWezIhd+3b4vGev3InXapQ5ab4tgn2BSyouBPyfL7JaTnDaYJIq/8zz1KSg5gjakD+Gm6aNcpYe2N3Q==}
     engines: {pnpm: '>=10.14.0'}
 
   '@eslint-community/eslint-utils@4.9.1':
@@ -4003,7 +4003,7 @@ snapshots:
     dependencies:
       syncpack: 14.3.0
 
-  '@escapace/typelevel@2.0.3': {}
+  '@escapace/typelevel@2.0.5': {}
 
   '@eslint-community/eslint-utils@4.9.1(eslint@10.2.0(jiti@2.6.1))':
     dependencies:
