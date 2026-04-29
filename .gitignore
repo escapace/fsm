@@ -10,6 +10,7 @@
 .env.production.local
 .env.test.local
 .eslintcache
+.firecrawl/
 .fusebox/
 .grunt
 .lake/
@@ -47,9 +48,7 @@
 bower_components
 build/Release
 coverage
-.firecrawl/
 dist
-.firecrawl/
 jspm_packages/
 lerna-debug.log*
 lib
@@ -58,9 +57,9 @@ logs
 node_modules/
 npm-debug.log*
 out
+perf/profiles/
 pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 web_modules/
 yarn-debug.log*
 yarn-error.log*
-perf/profiles/
