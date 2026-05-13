@@ -8,17 +8,17 @@
   },
   "bugs": "https://github.com/escapace/fsm/issues",
   "devDependencies": {
-    "@commitlint/cli": "20.5.2",
-    "@commitlint/config-conventional": "20.5.0",
+    "@commitlint/cli": "20.5.3",
+    "@commitlint/config-conventional": "20.5.3",
     "@escapace/pnpm-pack": "0.9.0",
     "@escapace/syncpack-configuration": "0.2.0",
     "@ls-lint/ls-lint": "2.3.1",
     "@vitest/coverage-v8": "4.1.5",
     "alien-deepsignals": "0.3.1",
-    "eslint": "10.2.1",
+    "eslint": "10.3.0",
     "eslint-config-escapace": "5.18.0",
     "esroll": "1.2.3",
-    "knip": "6.8.0",
+    "knip": "6.11.0",
     "lefthook": "2.1.6",
     "prettier": "3.8.3",
     "prettier-config-escapace": "1.2.2",
@@ -26,7 +26,7 @@
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "4.1.5",
-    "vue": "3.5.33",
+    "vue": "3.5.34",
     "xstate": "5.31.0",
     "yay-machine": "1.5.0"
   },
@@ -54,7 +54,7 @@
     "@escapace/reconcile": "^0.1.0",
     "@escapace/typelevel": "^2.0.5",
     "coastal": "^0.4.0",
-    "es-toolkit": "^1.46.0"
+    "es-toolkit": "^1.46.1"
   },
   "private": false,
   "publishConfig": {
