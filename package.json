@@ -51,7 +51,7 @@
   "license": "MPL-2.0",
   "module": "lib/neutral/index.js",
   "peerDependencies": {
-    "@escapace/reconcile": "^0.1.0",
+    "@escapace/reconcile": "^0.2.0",
     "@escapace/typelevel": "^2.0.5",
     "coastal": "^0.4.0",
     "es-toolkit": "^1.46.1"
