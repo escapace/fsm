@@ -13,21 +13,21 @@
     "@escapace/pnpm-pack": "0.9.1",
     "@escapace/syncpack-configuration": "0.3.0",
     "@ls-lint/ls-lint": "2.3.1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.9",
     "alien-deepsignals": "0.4.2",
-    "eslint": "10.4.1",
+    "eslint": "10.5.0",
     "eslint-config-escapace": "5.20.0",
     "esroll": "1.2.3",
-    "knip": "6.16.1",
+    "knip": "6.17.1",
     "lefthook": "2.1.9",
     "prettier": "3.8.4",
     "prettier-config-escapace": "1.2.2",
-    "syncpack": "15.3.1",
+    "syncpack": "15.3.2",
     "tsx": "4.22.4",
     "typescript": "6.0.3",
-    "vitest": "4.1.8",
-    "vue": "3.5.35",
-    "xstate": "5.32.0",
+    "vitest": "4.1.9",
+    "vue": "3.5.38",
+    "xstate": "5.32.1",
     "yay-machine": "1.5.0"
   },
   "devEngines": {
@@ -54,7 +54,7 @@
     "@escapace/reconcile": "^0.2.0",
     "@escapace/typelevel": "^2.0.5",
     "coastal": "^0.4.0",
-    "es-toolkit": "^1.47.0"
+    "es-toolkit": "^1.47.1"
   },
   "private": false,
   "publishConfig": {
