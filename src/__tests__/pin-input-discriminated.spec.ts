@@ -508,7 +508,7 @@ describe('pin-input-discriminated: runtime', () => {
       svc.subscribe((change) => {
         seen.push({
           contextState: change.context.state,
-          state: change.state as PinInputState,
+          state: change.state,
         })
       })
 

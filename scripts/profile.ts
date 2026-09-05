@@ -299,13 +299,9 @@ function runScenario(scenario: string, bundlePath: string): ScenarioArtifacts {
     writeFileSync(traceLogPath, result)
   } catch (error: unknown) {
     const stderr =
-      error !== null && typeof error === 'object' && 'stderr' in error
-        ? String((error as { stderr: unknown }).stderr)
-        : ''
+      error !== null && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : ''
     const stdout =
-      error !== null && typeof error === 'object' && 'stdout' in error
-        ? String((error as { stdout: unknown }).stdout)
-        : ''
+      error !== null && typeof error === 'object' && 'stdout' in error ? String(error.stdout) : ''
     writeFileSync(traceLogPath, stdout + '\n' + stderr)
   }
 

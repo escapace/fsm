@@ -1,5 +1,3 @@
-/* eslint-disable unicorn/prevent-abbreviations */
-
 import { isObject, remove, szudzik, type DirectAddressTable } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { STATE_MACHINE_STATE } from './constants'
@@ -63,7 +61,7 @@ const DEFAULT_SNAPSHOT_CONTEXT: InternalSnapshotContext = snapshot
 const DEFAULT_RECONCILE_CONTEXT: InternalReconcileContext = reconcile
 
 type TransitionCandidates = Array<{
-  predicates: Array<(...args: unknown[]) => boolean>
+  predicates: Array<(...arguments_: unknown[]) => boolean>
   reducer: InternalReducer
   source: StateMachineIdentifier
   target: StateMachineIdentifier
@@ -112,8 +110,8 @@ abstract class AbstractDispatcher {
 
   protected notifyChange(change: unknown): void {
     const subs = this.subscriptions
-    for (let i = 0; i < subs.length; i++) {
-      subs[i](change)
+    for (let index = 0; index < subs.length; index++) {
+      subs[index](change)
     }
   }
 
@@ -147,21 +145,16 @@ abstract class AbstractDispatcher {
       return undefined
     }
 
-    candidateLoop: for (let i = 0; i < transitions.length; i++) {
-      const candidate = transitions[i]
+    candidateLoop: for (let index = 0; index < transitions.length; index++) {
+      const candidate = transitions[index]
 
       this.actionBuffer.source = candidate.source
       this.actionBuffer.target = candidate.target
 
       const predicates = candidate.predicates
 
-      for (let j = 0; j < predicates.length; j++) {
-        if (
-          !(predicates[j] as (ctx: unknown, act: unknown) => boolean)(
-            this.context,
-            this.actionBuffer,
-          )
-        ) {
+      for (let index = 0; index < predicates.length; index++) {
+        if (!predicates[index](this.context, this.actionBuffer)) {
           continue candidateLoop
         }
       }
@@ -333,8 +326,8 @@ class DraftRuntime extends AbstractDispatcher {
       })
     }
 
-    for (let i = 0; i < traceLength; i++) {
-      parent.replayStep(trace[i])
+    for (let index = 0; index < traceLength; index++) {
+      parent.replayStep(trace[index])
     }
   }
 
@@ -475,11 +468,11 @@ export const interpret = <T extends StateMachineInterface>(
   const needsStateInjection = isObject(context) && 'state' in context
 
   if (needsStateInjection) {
-    const ctxState = (context as Record<string, unknown>).state
+    const contextState = (context as Record<string, unknown>).state
 
-    if (ctxState !== state) {
+    if (contextState !== state) {
       throw new StateMachineError({
-        actual: ctxState,
+        actual: contextState,
         expected: state,
         type: 'ContextStateMismatch',
       })

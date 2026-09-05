@@ -98,14 +98,7 @@ const finalize = <T extends StateMachineBuilderModel>(
     'snapshotContext',
     snapshot as (context: T['state']['context']) => T['state']['context'],
   )
-  const resolveReconcile = resolveOwnFunctionOption(
-    options,
-    'reconcileContext',
-    reconcile as (
-      parentContext: T['state']['context'],
-      nextContext: T['state']['context'],
-    ) => T['state']['context'],
-  )
+  const resolveReconcile = resolveOwnFunctionOption(options, 'reconcileContext', reconcile)
 
   const composedSnapshotContext =
     model.state.compositions.size === 0
@@ -114,9 +107,7 @@ const finalize = <T extends StateMachineBuilderModel>(
           const scoped = resolveSnapshot(context) as Record<StateMachineIdentifier, unknown>
 
           for (const [group, child] of model.state.compositions) {
-            const childSnapshotContext = child[STATE_MACHINE_STATE].snapshotContext as (
-              context: unknown,
-            ) => unknown
+            const childSnapshotContext = child[STATE_MACHINE_STATE].snapshotContext
             scoped[group] = childSnapshotContext(scoped[group])
           }
 
@@ -248,10 +239,7 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
           }
         }
 
-        const childReconcileContext = childState.reconcileContext as (
-          parentContext: unknown,
-          nextContext: unknown,
-        ) => unknown
+        const childReconcileContext = childState.reconcileContext
 
         const reducer =
           transition.reducer === undefined

@@ -3,7 +3,7 @@ import { interpret, isStateMachineError, isStateMachineErrorOfType, stateMachine
 
 // ── Discriminated union context ─────────────────────────────────────
 
-type AppContext = ErrorContext | LoadingContext | ReadyContext
+type ApplicationContext = ErrorContext | LoadingContext | ReadyContext
 interface ErrorContext {
   error: string
   state: 'Error'
@@ -17,7 +17,7 @@ interface ReadyContext {
   state: 'Ready'
 }
 
-const createAppMachine = () =>
+const createApplicationMachine = () =>
   stateMachine()
     .state('Loading')
     .state('Ready')
@@ -27,7 +27,7 @@ const createAppMachine = () =>
     .action<'Fail'>('Fail')
     .action<'Retry'>('Retry')
     .action<'Progress', number>('Progress')
-    .context<AppContext>(() => ({ progress: 0, state: 'Loading' as const }))
+    .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' as const }))
     .transition('Loading', 'Finish', 'Ready', (_context, _action) => ({
       data: ['done'],
       state: 'Ready' as const,
@@ -47,7 +47,7 @@ const createAppMachine = () =>
 
 describe('state injection: service.do()', () => {
   it('context.state matches service.state after transition', () => {
-    const svc = interpret(createAppMachine().done())
+    const svc = interpret(createApplicationMachine().done())
     assert.equal(svc.state, 'Loading')
     assert.equal(svc.context.state, 'Loading')
 
@@ -57,7 +57,7 @@ describe('state injection: service.do()', () => {
   })
 
   it('context.state correct through multiple transitions', () => {
-    const svc = interpret(createAppMachine().done())
+    const svc = interpret(createApplicationMachine().done())
 
     svc.do('Fail')
     assert.equal(svc.state, 'Error')
@@ -71,7 +71,7 @@ describe('state injection: service.do()', () => {
   })
 
   it('self-transition preserves context.state', () => {
-    const svc = interpret(createAppMachine().done())
+    const svc = interpret(createApplicationMachine().done())
 
     svc.do('Progress', 50)
     assert.equal(svc.state, 'Loading')
@@ -80,13 +80,13 @@ describe('state injection: service.do()', () => {
   })
 
   it('subscribe callback sees correct context.state', () => {
-    const svc = interpret(createAppMachine().done())
+    const svc = interpret(createApplicationMachine().done())
     const changes: Array<{ ctxState: string; state: string }> = []
 
     svc.subscribe((change) => {
       changes.push({
-        ctxState: (change.context as AppContext).state,
-        state: change.state as string,
+        ctxState: (change.context as ApplicationContext).state,
+        state: change.state,
       })
     })
 
@@ -348,7 +348,7 @@ describe('context factory validation', () => {
       .state('Ready')
       .initial('Loading')
       .action<'Finish'>('Finish')
-      .context<AppContext>(() => ({ progress: 0, state: 'Loading' as const }))
+      .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' as const }))
       .transition('Loading', 'Finish', 'Ready', () => ({
         data: [],
         state: 'Ready' as const,
@@ -365,9 +365,9 @@ describe('context factory validation', () => {
       .state('Ready')
       .initial('Loading')
       .action<'Finish'>('Finish')
-      .context<AppContext>(
+      .context<ApplicationContext>(
         // Factory returns Ready variant but initial state is Loading
-        (): AppContext => ({ data: [], state: 'Ready' }),
+        (): ApplicationContext => ({ data: [], state: 'Ready' }),
       )
       .transition('Loading', 'Finish', 'Ready', () => ({
         data: [],

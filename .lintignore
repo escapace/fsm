@@ -1,4 +1,4 @@
-coverage
 lake-manifest.json
 lib
+coverage
 pnpm-lock.yaml

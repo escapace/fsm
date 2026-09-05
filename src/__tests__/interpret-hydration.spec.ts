@@ -372,7 +372,7 @@ describe('interpret hydration', () => {
 
     assert.equal(snapshotContext.mock.calls.length, 1)
     assert.deepEqual(snapshotContext.mock.calls[0], [service.context])
-    assert.equal((draft.context as { count: number }).count, 0)
+    assert.equal(draft.context.count, 0)
     assert.equal((draft.context as Record<string, unknown>).draftOnly, true)
     assert.deepEqual(service.context, { count: 0 })
   })
@@ -398,7 +398,7 @@ describe('interpret hydration', () => {
     draft.commit()
 
     assert.equal(reconcileContext.mock.calls.length, 1)
-    assert.equal((service.context as { count: number }).count, 1)
+    assert.equal(service.context.count, 1)
     assert.equal((service.context as Record<string, unknown>).committed, true)
 
     assert.equal(service.do('STEP'), true)

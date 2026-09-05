@@ -347,7 +347,7 @@ describe('compose', () => {
       .state('ChildB')
       .initial('ChildA')
       .action('STEP')
-      .context(() => ({ childOwned: false as boolean, n: 0, overwritten: false as boolean }))
+      .context(() => ({ childOwned: false, n: 0, overwritten: false }))
       .transition('ChildA', 'STEP', 'ChildB', (context) => ({
         childOwned: context.childOwned,
         n: context.n + 1,

@@ -14,7 +14,7 @@ function check<_T extends true>() {}
 
 // ── Discriminated union context ─────────────────────────────────────
 
-type AppContext = ErrorContext | LoadingContext | ReadyContext
+type ApplicationContext = ErrorContext | LoadingContext | ReadyContext
 interface ErrorContext {
   error: string
   state: 'Error'
@@ -46,7 +46,7 @@ const discriminatedMachine = stateMachine()
   .action<'Fail'>('Fail')
   .action<'Retry'>('Retry')
   .action<'Progress', number>('Progress')
-  .context<AppContext>(() => ({ progress: 0, state: 'Loading' as const }))
+  .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' as const }))
   .transition('Loading', 'Finish', 'Ready', (_context, _action) => ({
     data: ['done'],
     state: 'Ready' as const,
@@ -81,9 +81,9 @@ type FModel = InferStateMachineModel<typeof flatMachine>
 
 describe('StateMachineContextAtState helper', () => {
   it('narrows discriminated union to source variant', () => {
-    check<Equal<StateMachineContextAtState<AppContext, 'Loading'>, LoadingContext>>()
-    check<Equal<StateMachineContextAtState<AppContext, 'Ready'>, ReadyContext>>()
-    check<Equal<StateMachineContextAtState<AppContext, 'Error'>, ErrorContext>>()
+    check<Equal<StateMachineContextAtState<ApplicationContext, 'Loading'>, LoadingContext>>()
+    check<Equal<StateMachineContextAtState<ApplicationContext, 'Ready'>, ReadyContext>>()
+    check<Equal<StateMachineContextAtState<ApplicationContext, 'Error'>, ErrorContext>>()
   })
 
   it('falls back to full type for flat context', () => {
@@ -99,7 +99,7 @@ describe('StateMachineContextAtState helper', () => {
   it('produces union for multi-source', () => {
     check<
       Equal<
-        StateMachineContextAtState<AppContext, 'Error' | 'Loading'>,
+        StateMachineContextAtState<ApplicationContext, 'Error' | 'Loading'>,
         ErrorContext | LoadingContext
       >
     >()
@@ -202,7 +202,7 @@ describe('conditional reducer requirement', () => {
       .state('Ready')
       .initial('Loading')
       .action<'Finish'>('Finish')
-      .context<AppContext>(() => ({ progress: 0, state: 'Loading' as const }))
+      .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' as const }))
       // @ts-expect-error — reducer required: LoadingCtx is not assignable to ReadyCtx
       .transition('Loading', 'Finish', 'Ready')
   })
@@ -213,7 +213,7 @@ describe('conditional reducer requirement', () => {
       .state('Ready')
       .initial('Loading')
       .action<'Progress'>('Progress')
-      .context<AppContext>(() => ({ progress: 0, state: 'Loading' as const }))
+      .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' as const }))
       // No reducer needed — source and target are both LoadingCtx
       .transition('Loading', 'Progress', 'Loading')
   })
