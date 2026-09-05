@@ -336,6 +336,7 @@ Composition stays flat at runtime.
 - parent and sibling context slices are preserved during child updates
 - parent context factories must not define keys that collide with composed group names
 - `.context(...).compose(...)` and `.compose(...).context(...)` produce the same compound context shape
+- repeating `.context(...)` replaces parent fields but preserves composed groups
 - a child used only through composition may omit its own initial state when transitions target explicit child states
 
 ## Errors
@@ -344,9 +345,11 @@ All library-thrown contract and lifecycle errors are `StateMachineError` instanc
 
 Exceptions thrown inside user guards or reducers are propagated unchanged.
 
+Numeric identifiers and their string forms (for example, `1` and `'1'`) count as duplicates within states, actions, or composed group names.
+
 | Error                        | Raised when                                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ActionAlreadyDeclared`      | `.action(...)` declares an action that is already declared in the current machine.                                             |
+| `ActionAlreadyDeclared`      | `.action(...)` or `.done()` detects duplicate action identifiers.                                                              |
 | `ActionConflict`             | `.compose(...)` introduces an action that conflicts with an action from a previously composed sibling.                         |
 | `ActionNotDeclared`          | a transition references an undeclared action, or `do(...)` / `draft.do(...)` dispatches an undeclared action.                  |
 | `ContextInitializerExpected` | a context initializer is not a function with no arguments.                                                                     |
@@ -357,7 +360,7 @@ Exceptions thrown inside user guards or reducers are propagated unchanged.
 | `GroupNameConflict`          | `.compose(group, child)` reuses a group name, collides with a declared state, or uses a group name that matches a child state. |
 | `HydrationShapeMismatch`     | `interpret(...)` receives a `hydrate` payload that is not an object with `state` and `context` keys.                           |
 | `StateMachineExpected`       | `interpret(...)` or `.compose(...)` receives a value that is not a state machine definition.                                   |
-| `StateAlreadyDeclared`       | `.state(...)` declares a state that is already declared, or `.compose(...)` introduces a child state that is already declared. |
+| `StateAlreadyDeclared`       | `.state(...)`, `.compose(...)`, or `.done()` detects duplicate state identifiers.                                              |
 | `StateNotDeclared`           | `.initial(...)`, `.transition(...)`, or hydrated startup references a state that has not been declared.                        |
 
 The package also exports `isStateMachineError(...)`, `isStateMachineErrorOfType(...)`, and `STATE_MACHINE_ERROR_TYPES`.

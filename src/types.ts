@@ -279,9 +279,12 @@ export type StateMachineBuilderReducer<
         : never
       [StateMachineBuilderActionType.Context]: {
         context: U extends StateMachineBuilderActionContext<infer X>
-          ? T['context'] extends object
-            ? $.Prettify<Pick<T['context'], Exclude<keyof T['context'], keyof X>> & X>
-            : X
+          ? [StateMachineGroups<{ state: T }>] extends [never]
+            ? X
+            : $.Prettify<
+                Pick<T['context'], Extract<keyof T['context'], StateMachineGroups<{ state: T }>>> &
+                  StateMachineBaseContext<X>
+              >
           : never
       }
       [StateMachineBuilderActionType.InitialState]: U extends StateMachineBuilderActionInitialState<
@@ -479,8 +482,17 @@ export interface StateMachineAction<
   type: B
 }
 
-export type StateMachineContextAtState<Context, State> =
-  Extract<Context, { state: State }> extends infer E ? ([E] extends [never] ? Context : E) : never
+export type StateMachineContextAtState<Context, State> = [Context] extends [
+  { state: infer ContextState },
+]
+  ? [State] extends [ContextState]
+    ? Extract<Context, { state: State }> extends infer E
+      ? [E] extends [never]
+        ? Context
+        : E
+      : never
+    : never
+  : Context
 
 export type StateMachinePredicate<
   T extends StateMachineBuilderModel,

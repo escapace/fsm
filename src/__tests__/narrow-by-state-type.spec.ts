@@ -96,6 +96,37 @@ describe('StateMachineContextAtState helper', () => {
     check<Equal<StateMachineContextAtState<NoDisc, 'X'>, NoDisc>>()
   })
 
+  it('rejects states missing from a discriminated context', () => {
+    check<Equal<StateMachineContextAtState<ApplicationContext, 'Missing'>, never>>()
+    check<Equal<StateMachineContextAtState<ApplicationContext, 'Loading' | 'Missing'>, never>>()
+  })
+
+  it('preserves broad and monomorphic discriminators within their declared states', () => {
+    interface BroadContext {
+      count: number
+      state: string
+    }
+    interface MonomorphicContext {
+      count: number
+      state: 'A' | 'B'
+    }
+    check<Equal<StateMachineContextAtState<BroadContext, 'C'>, BroadContext>>()
+    check<Equal<StateMachineContextAtState<MonomorphicContext, 'A'>, MonomorphicContext>>()
+    check<Equal<StateMachineContextAtState<MonomorphicContext, 'A' | 'B'>, MonomorphicContext>>()
+    check<Equal<StateMachineContextAtState<MonomorphicContext, 'C'>, never>>()
+  })
+
+  it('preserves contexts without a required discriminator', () => {
+    interface OptionalContext {
+      count: number
+      state?: 'A'
+    }
+    check<Equal<StateMachineContextAtState<OptionalContext, 'B'>, OptionalContext>>()
+    check<Equal<StateMachineContextAtState<number | undefined, 'A'>, number | undefined>>()
+    check<Equal<StateMachineContextAtState<unknown, 'A'>, unknown>>()
+    check<Equal<StateMachineContextAtState<never, 'A'>, never>>()
+  })
+
   it('produces union for multi-source', () => {
     check<
       Equal<
@@ -163,6 +194,26 @@ describe('reducer context narrowing', () => {
 // ── ts-expect-error: wrong variant ──────────────────────────────────
 
 describe('wrong variant produces type error', () => {
+  it('rejects transitions to a missing context variant', () => {
+    const builder = stateMachine()
+      .state('Loading')
+      .state('Ready')
+      .state('Missing')
+      .initial('Loading')
+      .action('Finish')
+      .context<ApplicationContext>(() => ({ progress: 0, state: 'Loading' }))
+
+    // @ts-expect-error no context variant exists for Missing
+    builder.transition('Loading', 'Finish', 'Missing', (context) => context)
+    // @ts-expect-error omitting the reducer cannot establish a missing variant
+    builder.transition('Loading', 'Finish', 'Missing')
+    // @ts-expect-error every target needs a context variant, not just Ready
+    builder.transition('Loading', 'Finish', ['Ready', 'Missing'], () => ({
+      data: [],
+      state: 'Ready',
+    }))
+  })
+
   it('LoadingCtx not assignable to reducer return type (ReadyCtx)', () => {
     type ReducerReturn = globalThis.ReturnType<
       StateMachineReducer<DModel, 'Loading', 'Finish', 'Ready'>

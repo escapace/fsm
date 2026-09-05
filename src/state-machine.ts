@@ -22,7 +22,7 @@ import {
 } from './types'
 
 type StateMachineContextSource = (() => unknown) & {
-  [CONTEXT_SOURCE_ORIGIN]?: unknown
+  [CONTEXT_SOURCE_ORIGIN]?: () => unknown
 }
 
 const unwrapContextSource = (contextSource: unknown): (() => unknown) | undefined => {
@@ -32,8 +32,10 @@ const unwrapContextSource = (contextSource: unknown): (() => unknown) | undefine
 
   assertContextFactory(contextSource)
 
-  return ((contextSource as StateMachineContextSource)[CONTEXT_SOURCE_ORIGIN] ??
-    contextSource) as () => unknown
+  const source = contextSource as StateMachineContextSource
+
+  // An own marker with value undefined still denotes a composed factory.
+  return Object.hasOwn(source, CONTEXT_SOURCE_ORIGIN) ? source[CONTEXT_SOURCE_ORIGIN] : source
 }
 
 const composeContextSource = (
@@ -54,7 +56,7 @@ const composeContextSource = (
       }
     }
 
-    for (const [group, child] of compositions.entries()) {
+    for (const [group, child] of compositions) {
       const childContextSource = child[STATE_MACHINE_STATE].context
 
       if (childContextSource !== undefined) {
@@ -75,6 +77,23 @@ const composeContextSource = (
   })
 
   return contextSource
+}
+
+const finalizeIdentifierIndex = (
+  indices: Map<StateMachineIdentifier, number>,
+  type: 'ActionAlreadyDeclared' | 'StateAlreadyDeclared',
+): Record<StateMachineIdentifier, number> => {
+  const table: Record<StateMachineIdentifier, number> = Object.fromEntries(indices)
+
+  // Object keys coerce numbers to strings. Reject aliases here so dispatch can
+  // retain direct property lookup without runtime normalization or validation.
+  for (const [identifier, index] of indices) {
+    if (table[identifier] !== index) {
+      throw new StateMachineError({ identifier, type })
+    }
+  }
+
+  return table
 }
 
 const finalize = <T extends StateMachineBuilderModel>(
@@ -100,26 +119,34 @@ const finalize = <T extends StateMachineBuilderModel>(
   )
   const resolveReconcile = resolveOwnFunctionOption(options, 'reconcileContext', reconcile)
 
-  const composedSnapshotContext =
-    model.state.compositions.size === 0
-      ? resolveSnapshot
-      : (context: T['state']['context']) => {
-          const scoped = resolveSnapshot(context) as Record<StateMachineIdentifier, unknown>
+  const compositions = model.state.compositions
+  // Default policies snapshot the whole graph once. Only custom snapshots need
+  // per-group sequencing; re-cloning default child graphs would split aliases.
+  let composedSnapshotContext = resolveSnapshot
+  for (const child of compositions.values()) {
+    if (resolveSnapshot === snapshot && child[STATE_MACHINE_STATE].snapshotContext === snapshot) {
+      continue
+    }
 
-          for (const [group, child] of model.state.compositions) {
-            const childSnapshotContext = child[STATE_MACHINE_STATE].snapshotContext
-            scoped[group] = childSnapshotContext(scoped[group])
-          }
+    composedSnapshotContext = (context: T['state']['context']) => {
+      const scoped = resolveSnapshot(context) as Record<StateMachineIdentifier, unknown>
 
-          return scoped as T['state']['context']
-        }
+      for (const [group, child] of compositions) {
+        const childSnapshotContext = child[STATE_MACHINE_STATE].snapshotContext
+        scoped[group] = childSnapshotContext(scoped[group])
+      }
+
+      return scoped
+    }
+    break
+  }
 
   // eslint-disable-next-line typescript/consistent-type-assertions
   const finalizedState = {
     actions: [...model.state.actions],
     context: model.state.context,
-    indiceActions: Object.fromEntries(model.state.indiceActions),
-    indiceStates: Object.fromEntries(model.state.indiceStates),
+    indiceActions: finalizeIdentifierIndex(model.state.indiceActions, 'ActionAlreadyDeclared'),
+    indiceStates: finalizeIdentifierIndex(model.state.indiceStates, 'StateAlreadyDeclared'),
     initial: model.state.initial,
     reconcileContext: resolveReconcile,
     snapshotContext: composedSnapshotContext,
@@ -165,11 +192,19 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
         throw new StateMachineError({ type: 'StateMachineExpected' })
       }
 
-      if (
-        model.state.compositions.has(action.payload.group) ||
-        model.state.states.indexOf(action.payload.group) !== -1
-      ) {
-        throw new StateMachineError({ identifier: action.payload.group, type: 'GroupNameConflict' })
+      const group = action.payload.group
+
+      if (model.state.states.indexOf(group) !== -1) {
+        throw new StateMachineError({ identifier: group, type: 'GroupNameConflict' })
+      }
+
+      // Groups occupy object properties, even though the builder stores them in a Map.
+      const groupKey = typeof group === 'number' ? String(group) : group
+      for (const siblingGroup of model.state.compositions.keys()) {
+        const siblingKey = typeof siblingGroup === 'number' ? String(siblingGroup) : siblingGroup
+        if (siblingKey === groupKey) {
+          throw new StateMachineError({ identifier: group, type: 'GroupNameConflict' })
+        }
       }
 
       for (const childStateIdentifier of childState.states) {
@@ -211,8 +246,6 @@ const reduce = (model: StateMachineBuilderModel, action: StateMachineBuilderActi
           model.state.indiceActions.set(childActionIdentifier, model.state.actions.length - 1)
         }
       }
-
-      const group = action.payload.group
 
       model.state.compositions.set(group, child)
       model.state.context = composeContextSource(

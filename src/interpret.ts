@@ -1,4 +1,4 @@
-import { isObject, remove, szudzik, type DirectAddressTable } from 'coastal'
+import { isObject, szudzik, type DirectAddressTable } from 'coastal'
 import { assertContextFactory } from './assert-context-factory'
 import { STATE_MACHINE_STATE } from './constants'
 import { reconcile, snapshot } from '@escapace/reconcile'
@@ -81,7 +81,8 @@ abstract class AbstractDispatcher {
   replayCursor: number
   readonly snapshotContext: InternalSnapshotContext
   state: StateMachineIdentifier
-  protected readonly subscriptions: InternalSubscription[] = []
+  // Avoid allocating a set for runtimes that never subscribe.
+  protected subscriptions: Set<InternalSubscription> | undefined
   readonly transitionMap: TransitionTable
 
   constructor(
@@ -109,19 +110,20 @@ abstract class AbstractDispatcher {
   }
 
   protected notifyChange(change: unknown): void {
-    const subs = this.subscriptions
-    for (let index = 0; index < subs.length; index++) {
-      subs[index](change)
+    const subscriptions = this.subscriptions
+    if (subscriptions === undefined || subscriptions.size === 0) return
+
+    for (const subscription of subscriptions) {
+      subscription(change)
     }
   }
 
   subscribe(subscription: InternalSubscription): () => void {
-    if (!this.subscriptions.includes(subscription)) {
-      this.subscriptions.push(subscription)
-    }
+    const subscriptions = (this.subscriptions ??= new Set())
+    subscriptions.add(subscription)
 
     return () => {
-      remove(this.subscriptions, (value) => value === subscription)
+      subscriptions.delete(subscription)
     }
   }
 
@@ -354,7 +356,7 @@ class DraftRuntime extends AbstractDispatcher {
       children.clear()
     }
 
-    if (this.subscriptions.length > 0) this.subscriptions.length = 0
+    this.subscriptions?.clear()
 
     const parent = this.parent
 
