@@ -18,12 +18,12 @@
     "eslint": "10.9.1",
     "eslint-config-escapace": "5.20.4",
     "esroll": "1.3.1",
-    "knip": "6.33.0",
+    "knip": "6.34.0",
     "lefthook": "2.1.12",
     "prettier": "3.9.6",
     "prettier-config-escapace": "1.2.2",
     "syncpack": "15.3.3",
-    "tsx": "4.23.12",
+    "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "4.1.11",
     "vue": "3.5.42",
@@ -54,7 +54,7 @@
     "@escapace/reconcile": "^0.2.0",
     "@escapace/typelevel": "^2.0.5",
     "coastal": "^0.4.0",
-    "es-toolkit": "^1.51.0"
+    "es-toolkit": "^1.52.0"
   },
   "private": false,
   "publishConfig": {
