@@ -168,8 +168,8 @@ importers:
   .:
     dependencies:
       '@escapace/reconcile':
-        specifier: ^0.2.0
-        version: 0.2.0(coastal@0.4.0)(es-toolkit@1.52.0)
+        specifier: ^1.0.0
+        version: 1.0.0(es-toolkit@1.52.0)
       '@escapace/typelevel':
         specifier: ^2.0.5
         version: 2.0.5
@@ -532,11 +532,10 @@ packages:
     engines: {node: '>=24'}
     hasBin: true
 
-  '@escapace/reconcile@0.2.0':
-    resolution: {integrity: sha512-MlOHscTjLzGMKIb2J8nHFo0FEy5SJEUBw+1y5Hcgc+VyON9ELDceJfeJb9Bpc/bF6eYEgeKdLYpCZ8mAc20PVw==}
+  '@escapace/reconcile@1.0.0':
+    resolution: {integrity: sha512-4jAy0HrcpVj2bWMD1ZeCYsfuVKwoIScWrxn35TaS6J4tVoXSAsCUe0QcCA2l5/h95N1+7eKIqqsloBZTJXSgfQ==}
     peerDependencies:
-      coastal: ^0.4.0
-      es-toolkit: ^1.46.1
+      es-toolkit: ^1.51.0
 
   '@escapace/syncpack-configuration@0.3.0':
     resolution: {integrity: sha512-wqnoFkEAEHVOeP9cwst8mLLwS7rMruZqT8jiOF4v1dbnRc6gV482M5HFHpqc/sIK9sNoYLvyGxlgw+POQltBKQ==}
@@ -3637,9 +3636,8 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@escapace/reconcile@0.2.0(coastal@0.4.0)(es-toolkit@1.52.0)':
+  '@escapace/reconcile@1.0.0(es-toolkit@1.52.0)':
     dependencies:
-      coastal: 0.4.0
       es-toolkit: 1.52.0
 
   '@escapace/syncpack-configuration@0.3.0(syncpack@15.3.3)':
